@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  graphs    Graph[]
+
+  @@map("users")
+}
+
+model Graph {
+  id          String         @id @default(uuid())
+  userId      String         @map("user_id")
+  name        String
+  description String?
+  graphJson   Json           @map("graph_json")
+  version     Int            @default(1)
+  isDeployed  Boolean        @default(false) @map("is_deployed")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versions    GraphVersion[]
+  runs        Run[]
+  testCases   TestCase[]
+
+  @@map("graphs")
+}
+
+model GraphVersion {
+  id           String   @id @default(uuid())
+  graphId      String   @map("graph_id")
+  version      Int
+  snapshotJson Json     @map("snapshot_json")
+  message      String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  graph        Graph    @relation(fields: [graphId], references: [id], onDelete: Cascade)
+
+  @@map("graph_versions")
+}
+
+model Run {
+  id             String     @id @default(uuid())
+  graphId        String     @map("graph_id")
+  graphVersion   Int        @map("graph_version")
+  status         RunStatus  @default(PENDING)
+  inputPayload   Json       @map("input_payload")
+  outputPayload  Json?      @map("output_payload")
+  errorMessage   String?    @map("error_message")
+  durationMs     Int?       @map("duration_ms")
+  tokenCount     Int?       @map("token_count")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  graph          Graph      @relation(fields: [graphId], references: [id])
+  events         RunEvent[]
+  testCases      TestCase[] @relation("LastRun")
+
+  @@map("runs")
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  AWAITING_HUMAN
+  COMPLETE
+  FAILED
+}
+
+model RunEvent {
+  id        String   @id @default(uuid())
+  runId     String   @map("run_id")
+  eventType String   @map("event_type")
+  nodeId    String?  @map("node_id")
+  payload   Json
+  sequence  Int
+  ts        DateTime @default(now())
+  run       Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@map("run_events")
+}
+
+model TestCase {
+  id                    String      @id @default(uuid())
+  graphId               String      @map("graph_id")
+  name                  String
+  inputPayload          Json        @map("input_payload")
+  expectedPath          String[]    @map("expected_path")
+  expectedOutputContains String?   @map("expected_output_contains")
+  lastResult            TestResult? @map("last_result")
+  lastRunId             String?     @map("last_run_id")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  graph                 Graph       @relation(fields: [graphId], references: [id], onDelete: Cascade)
+  lastRun               Run?        @relation("LastRun", fields: [lastRunId], references: [id])
+
+  @@map("test_cases")
+}
+
+enum TestResult {
+  PASS
+  FAIL
+  PENDING
+}
