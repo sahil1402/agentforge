@@ -7,8 +7,7 @@ import { useRouter } from 'next/navigation'
 import {
   Brain, Wrench, Database, GitBranch, UserCheck,
   Save, Play, Square, ChevronLeft, Zap,
-  TestTube, Rocket, History, Keyboard, Command,
-  Layers, ArrowRight, GripVertical,
+  TestTube, Rocket, History, Layers, GripVertical,
 } from 'lucide-react'
 import { useGraphStore } from '@/store/graph-store'
 import { NODE_COLORS, NODE_LABELS, NODE_DESCRIPTIONS, type NodeType } from '@/lib/types'
@@ -18,15 +17,15 @@ const Canvas          = dynamic(() => import('@/components/canvas/canvas'),     
 const NodeConfigPanel = dynamic(() => import('@/components/canvas/node-config-panel'), { ssr: false })
 const TracePanel      = dynamic(() => import('@/components/canvas/trace-panel'),       { ssr: false })
 
-// ─── Palette node items ──────────────────────────────────────────────────────
+// ─── Palette ─────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const PALETTE_NODES: Array<{ type: NodeType; label: string; Icon: React.FC<any>; desc: string }> = [
-  { type: 'agent',      Icon: Brain,      label: 'Agent',      desc: NODE_DESCRIPTIONS.agent },
-  { type: 'tool',       Icon: Wrench,     label: 'Tool',       desc: NODE_DESCRIPTIONS.tool },
-  { type: 'memory',     Icon: Database,   label: 'Memory',     desc: NODE_DESCRIPTIONS.memory },
-  { type: 'router',     Icon: GitBranch,  label: 'Router',     desc: NODE_DESCRIPTIONS.router },
-  { type: 'human_gate', Icon: UserCheck,  label: 'Gate',       desc: NODE_DESCRIPTIONS.human_gate },
+  { type: 'agent',      Icon: Brain,      label: 'Agent',  desc: 'LLM with tools' },
+  { type: 'tool',       Icon: Wrench,     label: 'Tool',   desc: 'Python function' },
+  { type: 'memory',     Icon: Database,   label: 'Memory', desc: 'Vector store' },
+  { type: 'router',     Icon: GitBranch,  label: 'Router', desc: 'Conditional edge' },
+  { type: 'human_gate', Icon: UserCheck,  label: 'Gate',   desc: 'Approval point' },
 ]
 
 function PaletteNode({ type, label, Icon, desc }: typeof PALETTE_NODES[0]) {
@@ -41,44 +40,31 @@ function PaletteNode({ type, label, Icon, desc }: typeof PALETTE_NODES[0]) {
     <div
       draggable
       onDragStart={onDragStart}
-      className={cn(
-        'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-grab border transition-all duration-200',
-        'hover:scale-[1.02] active:cursor-grabbing active:scale-[0.97]'
-      )}
+      className="group relative flex items-center gap-2.5 px-2.5 py-2 rounded-[10px] cursor-grab transition-all duration-150 hover:scale-[1.02] active:cursor-grabbing active:scale-[0.97]"
       style={{
         background: colors.bg,
-        borderColor: colors.border,
+        border: `1px solid ${colors.border}`,
       }}
-      title={`Drag to add ${label} node`}
+      title={`Drag to add ${label}`}
     >
-      {/* Grip indicator */}
-      <GripVertical size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/[0.06] group-hover:text-white/[0.12] transition-colors" />
-
-      {/* Icon */}
       <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200 group-hover:scale-105"
+        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
         style={{
-          background: `${colors.primary}12`,
-          boxShadow: `inset 0 0 0 1px ${colors.primary}18`,
+          background: `${colors.primary}14`,
+          boxShadow: `inset 0 0 0 1px ${colors.primary}20`,
         }}
       >
-        <Icon size={14} style={{ color: colors.primary }} strokeWidth={2} />
+        <Icon size={13} style={{ color: colors.primary }} strokeWidth={2} />
       </div>
-
-      {/* Label */}
-      <div className="min-w-0 pr-3">
-        <p className="text-[11.5px] font-semibold text-[var(--text-primary)] leading-none mb-[3px] font-display">
-          {label}
-        </p>
-        <p className="text-[9px] text-[var(--text-ghost)] font-mono leading-tight line-clamp-1">
-          {desc}
-        </p>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold leading-none mb-[2px]" style={{ color: 'var(--text-primary)', fontFamily: 'Syne, sans-serif' }}>{label}</p>
+        <p className="text-[8.5px] leading-none" style={{ color: 'var(--text-ghost)', fontFamily: 'JetBrains Mono, monospace' }}>{desc}</p>
       </div>
     </div>
   )
 }
 
-// ─── Top Toolbar ─────────────────────────────────────────────────────────────
+// ─── Toolbar ─────────────────────────────────────────────────────────────────
 
 function TopToolbar({ graphId }: { graphId: string }) {
   const router = useRouter()
@@ -99,9 +85,7 @@ function TopToolbar({ graphId }: { graphId: string }) {
         body: JSON.stringify({ graphJson: { nodes, edges }, name: graphName }),
       })
       useGraphStore.getState().markSaved()
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }, [graphId, graphName])
 
   const handleRun = useCallback(async () => {
@@ -109,133 +93,113 @@ function TopToolbar({ graphId }: { graphId: string }) {
       const res = await fetch('/api/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          graphId,
-          input: { query: 'test input' },
-        }),
+        body: JSON.stringify({ graphId, input: { query: 'test input' } }),
       })
       const data = await res.json()
       useGraphStore.getState().setRunState(data.runId, 'RUNNING')
-    } catch (e) {
-      console.error('Run failed', e)
-    }
+    } catch (e) { console.error('Run failed', e) }
   }, [graphId])
-
-  const handleStop = useCallback(() => {
-    clearRunState()
-  }, [clearRunState])
 
   const isRunning = runStatus === 'RUNNING' || runStatus === 'AWAITING_HUMAN'
 
   return (
-    <header className="h-12 bg-[var(--surface-1)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)] flex items-center px-4 gap-3 flex-shrink-0 relative z-50">
-
-      {/* Logo + Back */}
+    <header
+      className="h-11 flex items-center px-3 gap-2 flex-shrink-0 relative z-50"
+      style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--border-subtle)' }}
+    >
+      {/* Logo */}
       <button
         onClick={() => router.push('/dashboard')}
-        className="flex items-center gap-2.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors mr-1 group"
+        className="flex items-center gap-2 mr-1 group"
+        style={{ color: 'var(--text-muted)' }}
       >
-        <ChevronLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
-        <div className="w-6 h-6 rounded-lg flex items-center justify-center relative overflow-hidden"
-          style={{
-            background: 'linear-gradient(135deg, #9B8AFF, #5CA4FF)',
-          }}
+        <ChevronLeft size={13} className="group-hover:-translate-x-0.5 transition-transform" />
+        <div
+          className="w-5 h-5 rounded-md flex items-center justify-center"
+          style={{ background: 'linear-gradient(135deg, #9B8AFF, #5CA4FF)' }}
         >
-          <Zap size={12} className="text-white relative z-10" strokeWidth={2.5} />
+          <Zap size={10} className="text-white" strokeWidth={2.5} />
         </div>
       </button>
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 font-mono text-[11px]">
-        <span
-          className="text-[var(--text-ghost)] cursor-pointer hover:text-[var(--text-muted)] transition-colors"
-          onClick={() => router.push('/dashboard')}
-        >
-          graphs
-        </span>
-        <ArrowRight size={9} className="text-[var(--text-ghost)] opacity-40" />
+      <div className="flex items-center gap-1.5" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>
+        <span style={{ color: 'var(--text-ghost)', cursor: 'pointer' }} onClick={() => router.push('/dashboard')}>graphs</span>
+        <span style={{ color: 'var(--text-ghost)', opacity: 0.4, fontSize: '8px' }}>→</span>
         <input
           value={graphName}
           onChange={(e) => setGraphName(e.target.value)}
-          className="bg-transparent text-[var(--text-primary)] font-semibold outline-none border-b border-transparent focus:border-white/15 transition-colors min-w-[120px] font-display text-[12px]"
+          className="bg-transparent outline-none border-b border-transparent focus:border-white/15 transition-colors min-w-[100px]"
+          style={{ color: 'var(--text-primary)', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: '12px' }}
         />
-
-        {/* Version badge */}
-        <span className="text-[var(--text-ghost)] bg-[var(--surface-3)] border border-[var(--border-subtle)] rounded-md px-2 py-[2px] text-[9px] font-semibold">
+        <span
+          className="rounded-md px-1.5 py-[1px]"
+          style={{ background: 'var(--surface-3)', border: '1px solid var(--border-subtle)', fontSize: '8px', fontWeight: 600, color: 'var(--text-muted)' }}
+        >
           v{graphVersion}
         </span>
-
-        {/* Dirty indicator */}
         {isDirty && (
-          <span className="w-1.5 h-1.5 rounded-full bg-[#FFB547] shadow-[0_0_6px_rgba(255,181,71,0.4)]" />
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent-amber)', boxShadow: '0 0 6px rgba(255,181,71,0.4)' }} />
         )}
       </div>
 
-      {/* ── Right Actions ──────────────────────────────────────────────── */}
+      {/* Right actions */}
       <div className="ml-auto flex items-center gap-1.5">
-
-        {/* Save */}
         <button
           onClick={handleSave}
           disabled={!isDirty || saving}
           className={cn(
-            'h-8 px-3.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-all border',
-            isDirty
-              ? 'bg-[var(--surface-3)] border-[var(--border-default)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-hover)]'
-              : 'opacity-30 border-transparent text-[var(--text-ghost)] cursor-default'
+            'h-7 px-2.5 rounded-md text-[10px] font-medium flex items-center gap-1.5 transition-all',
+            isDirty ? 'opacity-100' : 'opacity-30 cursor-default'
           )}
+          style={{
+            background: isDirty ? 'var(--surface-3)' : 'transparent',
+            border: isDirty ? '1px solid var(--border-default)' : '1px solid transparent',
+            color: isDirty ? 'var(--text-secondary)' : 'var(--text-ghost)',
+          }}
         >
-          <Save size={12} />
+          <Save size={11} />
           {saving ? 'Saving…' : 'Save'}
           {isDirty && (
-            <kbd className="hidden sm:inline font-mono text-[8px] px-1 py-px rounded bg-white/[0.05] text-[var(--text-ghost)] ml-1">⌘S</kbd>
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: '7px', background: 'rgba(255,255,255,0.05)', padding: '1px 3px', borderRadius: '3px', color: 'var(--text-ghost)' }}>⌘S</span>
           )}
         </button>
 
-        <div className="w-px h-5 bg-[var(--border-subtle)] mx-1" />
+        <div className="w-px h-4" style={{ background: 'var(--border-subtle)' }} />
 
-        {/* History */}
-        <button
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-ghost)] hover:text-[var(--text-secondary)] hover:bg-white/[0.04] transition-all"
-          title="Version history"
-        >
-          <History size={14} />
+        <button className="w-7 h-7 flex items-center justify-center rounded-md transition-all hover:bg-white/[0.04]" style={{ color: 'var(--text-ghost)' }} title="History">
+          <History size={13} />
+        </button>
+        <button className="w-7 h-7 flex items-center justify-center rounded-md transition-all hover:bg-white/[0.04]" style={{ color: 'var(--text-ghost)' }} title="Tests">
+          <TestTube size={13} />
         </button>
 
-        {/* Test */}
+        <div className="w-px h-4" style={{ background: 'var(--border-subtle)' }} />
+
         <button
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-ghost)] hover:text-[var(--text-secondary)] hover:bg-white/[0.04] transition-all"
-          title="Test harness"
+          className="h-7 px-2.5 rounded-md text-[10px] font-semibold flex items-center gap-1.5 transition-all"
+          style={{ background: 'rgba(155,138,255,0.08)', border: '1px solid rgba(155,138,255,0.2)', color: '#9B8AFF' }}
         >
-          <TestTube size={14} />
-        </button>
-
-        <div className="w-px h-5 bg-[var(--border-subtle)] mx-1" />
-
-        {/* Deploy */}
-        <button className="h-8 px-3.5 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition-all border bg-[#9B8AFF]/8 border-[#9B8AFF]/20 text-[#9B8AFF] hover:bg-[#9B8AFF]/14 hover:border-[#9B8AFF]/30">
-          <Rocket size={12} />
+          <Rocket size={11} />
           Deploy
         </button>
 
-        {/* Run / Stop */}
         {isRunning ? (
           <button
-            onClick={handleStop}
-            className="h-8 px-4 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all bg-[#FF6B81]/10 border border-[#FF6B81]/25 text-[#FF6B81] hover:bg-[#FF6B81]/18 active:scale-[0.97]"
+            onClick={() => clearRunState()}
+            className="h-7 px-3 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-all active:scale-[0.97]"
+            style={{ background: 'rgba(255,107,129,0.1)', border: '1px solid rgba(255,107,129,0.25)', color: '#FF6B81' }}
           >
-            <Square size={10} className="fill-current" />
+            <Square size={9} className="fill-current" />
             Stop
           </button>
         ) : (
           <button
             onClick={handleRun}
-            className="h-8 px-4 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all bg-[#00E5C3]/10 border border-[#00E5C3]/25 text-[#00E5C3] hover:bg-[#00E5C3]/18 active:scale-[0.97]"
-            style={{
-              boxShadow: '0 0 20px rgba(0,229,195,0.05)',
-            }}
+            className="h-7 px-3 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-all active:scale-[0.97]"
+            style={{ background: 'rgba(0,229,195,0.1)', border: '1px solid rgba(0,229,195,0.25)', color: '#00E5C3', boxShadow: '0 0 16px rgba(0,229,195,0.06)' }}
           >
-            <Play size={10} className="fill-current" />
+            <Play size={9} className="fill-current" />
             Run
           </button>
         )}
@@ -244,36 +208,29 @@ function TopToolbar({ graphId }: { graphId: string }) {
   )
 }
 
-// ─── Node Palette Sidebar ────────────────────────────────────────────────────
+// ─── Palette Sidebar ─────────────────────────────────────────────────────────
 
 function NodePalette() {
   return (
-    <aside className="w-[200px] flex-shrink-0 bg-[var(--surface-1)]/60 backdrop-blur-xl border-r border-[var(--border-subtle)] flex flex-col overflow-hidden">
-
-      {/* Header */}
-      <div className="px-3.5 pt-3.5 pb-2.5 border-b border-[var(--border-subtle)]">
-        <div className="flex items-center gap-2">
-          <Layers size={12} className="text-[var(--text-ghost)]" />
-          <p className="font-mono text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--text-ghost)]">
+    <aside
+      className="w-[170px] flex-shrink-0 flex flex-col overflow-hidden"
+      style={{ background: 'rgba(12,16,25,0.6)', borderRight: '1px solid var(--border-subtle)' }}
+    >
+      <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="flex items-center gap-1.5">
+          <Layers size={10} style={{ color: 'var(--text-ghost)' }} />
+          <p style={{ fontFamily: 'JetBrains Mono', fontSize: '8px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase' as const, color: 'var(--text-ghost)' }}>
             Components
           </p>
         </div>
       </div>
-
-      {/* Node list */}
-      <div className="p-2.5 flex flex-col gap-2 overflow-y-auto flex-1">
-        {PALETTE_NODES.map((n) => (
-          <PaletteNode key={n.type} {...n} />
-        ))}
+      <div className="p-2 flex flex-col gap-1.5 overflow-y-auto flex-1">
+        {PALETTE_NODES.map((n) => <PaletteNode key={n.type} {...n} />)}
       </div>
-
-      {/* Footer hint */}
-      <div className="p-3 border-t border-[var(--border-subtle)]">
+      <div className="p-2.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <div className="flex items-center gap-1.5 justify-center">
-          <GripVertical size={9} className="text-[var(--text-ghost)]" />
-          <p className="font-mono text-[8px] text-[var(--text-ghost)] tracking-wider">
-            DRAG TO CANVAS
-          </p>
+          <GripVertical size={8} style={{ color: 'var(--text-ghost)' }} />
+          <p style={{ fontFamily: 'JetBrains Mono', fontSize: '7px', color: 'var(--text-ghost)', letterSpacing: '0.1em' }}>DRAG TO CANVAS</p>
         </div>
       </div>
     </aside>
@@ -282,11 +239,7 @@ function NodePalette() {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default function CanvasPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+export default function CanvasPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: graphId } = use(params)
   const { loadGraph, activeRunId } = useGraphStore()
 
@@ -296,30 +249,22 @@ export default function CanvasPage({
       .then((r) => r.json())
       .then((data) => {
         if (data.graphJson) {
-          loadGraph(data.graphJson, {
-            id: data.id,
-            name: data.name,
-            version: data.version,
-          })
+          loadGraph(data.graphJson, { id: data.id, name: data.name, version: data.version })
         }
       })
       .catch(console.error)
   }, [graphId, loadGraph])
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault()
-        // Trigger save via store
-      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') e.preventDefault()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--void)] overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--void)' }}>
       <TopToolbar graphId={graphId} />
       <div className="flex flex-1 min-h-0">
         <NodePalette />
