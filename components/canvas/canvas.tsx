@@ -1,15 +1,16 @@
 'use client'
 
-import { useCallback, useRef, useEffect } from 'react'
-import { ReactFlow, Background, BackgroundVariant, Controls, MiniMap, type ReactFlowInstance, type OnConnectStartParams, SelectionMode } from '@xyflow/react'
+import { useCallback, useRef } from 'react'
+import {
+  ReactFlow, Background, BackgroundVariant, Controls, MiniMap,
+  type ReactFlowInstance, type OnConnectStartParams, SelectionMode,
+} from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useGraphStore } from '@/store/graph-store'
 import { nodeTypes } from './nodes'
 import { edgeTypes } from './edges'
 import type { NodeType } from '@/lib/types'
 import { NODE_COLORS } from '@/lib/types'
-
-// ─── Canvas ───────────────────────────────────────────────────────────────────
 
 export default function Canvas() {
   const {
@@ -26,7 +27,6 @@ export default function Canvas() {
     rfInstance.current = instance
   }, [])
 
-  // Drop handler — allows dragging node types from the sidebar palette
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
@@ -49,12 +49,10 @@ export default function Canvas() {
     [addNode]
   )
 
-  // Deselect when clicking the canvas background
   const onPaneClick = useCallback(() => {
     setSelectedNode(null)
   }, [setSelectedNode])
 
-  // Track connect-start so we know which node initiated a connection
   const onConnectStart = useCallback((_: unknown, { nodeId }: OnConnectStartParams) => {
     connectingNodeId.current = nodeId ?? null
   }, [])
@@ -64,7 +62,10 @@ export default function Canvas() {
   }, [])
 
   return (
-    <div className="w-full h-full" onDragOver={onDragOver} onDrop={onDrop}>
+    <div className="w-full h-full relative" onDragOver={onDragOver} onDrop={onDrop}>
+      {/* Atmospheric background glow */}
+      <div className="canvas-atmosphere" />
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -78,39 +79,47 @@ export default function Canvas() {
         onPaneClick={onPaneClick}
         onInit={onInit}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={{ padding: 0.25 }}
         defaultEdgeOptions={{
           type: 'smoothstep',
           animated: false,
         }}
         selectionMode={SelectionMode.Partial}
         proOptions={{ hideAttribution: true }}
-        minZoom={0.2}
-        maxZoom={2}
+        minZoom={0.15}
+        maxZoom={2.5}
         className="bg-transparent"
+        connectionLineStyle={{
+          stroke: 'rgba(155, 138, 255, 0.4)',
+          strokeWidth: 2,
+          strokeDasharray: '6 4',
+        }}
       >
-        {/* Dot grid background */}
+        {/* Dot grid — finer, more subtle */}
         <Background
           variant={BackgroundVariant.Dots}
-          gap={28}
-          size={1}
-          color="rgba(255,255,255,0.06)"
+          gap={32}
+          size={0.8}
+          color="rgba(255,255,255,0.04)"
         />
 
-        {/* Controls — zoom in/out/fit */}
+        {/* Controls */}
         <Controls
-          className="!bg-[#0F1220] !border-white/[0.07] !shadow-xl"
+          className="!bg-[var(--surface-1)] !border-[var(--border-subtle)] !shadow-xl !rounded-[10px]"
           showInteractive={false}
+          position="bottom-left"
         />
 
         {/* MiniMap */}
         <MiniMap
           nodeColor={(node) => {
             const type = node.type as NodeType
-            return NODE_COLORS[type]?.dot ?? '#5C6280'
+            return NODE_COLORS[type]?.primary ?? '#4A5068'
           }}
-          maskColor="rgba(5,6,10,0.75)"
-          className="!bg-[#0D1017] !border-white/[0.07] !rounded-xl overflow-hidden"
+          maskColor="rgba(4, 6, 12, 0.8)"
+          className="!bg-[var(--surface-1)] !border-[var(--border-subtle)] !rounded-[14px] overflow-hidden"
+          pannable
+          zoomable
         />
       </ReactFlow>
     </div>

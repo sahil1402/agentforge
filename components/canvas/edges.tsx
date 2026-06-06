@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -33,50 +33,109 @@ export const AnimatedEdge = memo(function AnimatedEdge({
   const isCompleted     = completedNodeIds.has(source) && !isSourceActive
 
   const strokeColor = isLive
-    ? 'rgba(15,217,138,0.6)'
+    ? '#00E5C3'
     : isCompleted
-    ? 'rgba(139,127,254,0.4)'
-    : 'rgba(255,255,255,0.12)'
+    ? 'rgba(155, 138, 255, 0.45)'
+    : selected
+    ? 'rgba(255, 255, 255, 0.2)'
+    : 'rgba(255, 255, 255, 0.08)'
 
-  const strokeWidth = isLive ? 2 : selected ? 1.5 : 1
+  const strokeWidth = isLive ? 2 : selected ? 1.8 : 1
+
+  // Generate unique gradient IDs for this edge
+  const gradientId = `edge-grad-${id}`
+  const glowFilterId = `edge-glow-${id}`
 
   return (
     <>
-      {/* Glow layer for active edges */}
+      {/* SVG Defs for gradients and filters */}
+      <defs>
+        {isLive && (
+          <>
+            <linearGradient id={gradientId} gradientUnits="userSpaceOnUse"
+              x1={sourceX} y1={sourceY} x2={targetX} y2={targetY}
+            >
+              <stop offset="0%" stopColor="#00E5C3" stopOpacity="0.8" />
+              <stop offset="50%" stopColor="#00E5C3" stopOpacity="1" />
+              <stop offset="100%" stopColor="#5CA4FF" stopOpacity="0.8" />
+            </linearGradient>
+            <filter id={glowFilterId}>
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </>
+        )}
+        {isCompleted && (
+          <linearGradient id={gradientId} gradientUnits="userSpaceOnUse"
+            x1={sourceX} y1={sourceY} x2={targetX} y2={targetY}
+          >
+            <stop offset="0%" stopColor="#9B8AFF" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#9B8AFF" stopOpacity="0.25" />
+          </linearGradient>
+        )}
+      </defs>
+
+      {/* Outer glow layer for active edges */}
       {isLive && (
         <path
           d={edgePath}
           fill="none"
-          stroke="rgba(15,217,138,0.15)"
-          strokeWidth={6}
+          stroke="rgba(0, 229, 195, 0.08)"
+          strokeWidth={8}
           strokeLinecap="round"
+          filter={`url(#${glowFilterId})`}
         />
       )}
 
+      {/* Main edge path */}
       <BaseEdge
         id={id}
         path={edgePath}
         markerEnd={markerEnd}
         style={{
-          stroke: strokeColor,
+          stroke: (isLive || isCompleted) ? `url(#${gradientId})` : strokeColor,
           strokeWidth,
-          strokeDasharray: isCompleted ? 'none' : isLive ? 'none' : '5 4',
-          transition: 'stroke 0.3s, stroke-width 0.3s',
+          strokeDasharray: !isLive && !isCompleted ? '6 5' : 'none',
+          transition: 'stroke 0.35s ease, stroke-width 0.35s ease',
+          strokeLinecap: 'round',
         }}
       />
 
-      {/* Animated dot flowing along edge when active */}
+      {/* Animated flow dots when active */}
       {isLive && (
-        <circle r="3" fill="rgba(15,217,138,0.9)">
-          <animateMotion dur="1.6s" repeatCount="indefinite" rotate="auto">
-            <mpath href={`#${id}`} />
-          </animateMotion>
-        </circle>
+        <>
+          <path id={`motion-${id}`} d={edgePath} fill="none" stroke="none" />
+          <circle r="2.5" fill="#00E5C3" opacity="0.9">
+            <animateMotion dur="1.2s" repeatCount="indefinite" rotate="auto">
+              <mpath href={`#motion-${id}`} />
+            </animateMotion>
+          </circle>
+          <circle r="2" fill="#00E5C3" opacity="0.5">
+            <animateMotion dur="1.2s" repeatCount="indefinite" rotate="auto" begin="0.4s">
+              <mpath href={`#motion-${id}`} />
+            </animateMotion>
+          </circle>
+          <circle r="1.5" fill="#00E5C3" opacity="0.3">
+            <animateMotion dur="1.2s" repeatCount="indefinite" rotate="auto" begin="0.8s">
+              <mpath href={`#motion-${id}`} />
+            </animateMotion>
+          </circle>
+        </>
       )}
 
-      {/* Hidden path for animateMotion reference */}
-      {isLive && (
-        <path id={id} d={edgePath} fill="none" stroke="none" />
+      {/* Completed checkmark dot */}
+      {isCompleted && (
+        <>
+          <path id={`done-${id}`} d={edgePath} fill="none" stroke="none" />
+          <circle r="2" fill="#9B8AFF" opacity="0.5">
+            <animateMotion dur="2.5s" repeatCount="indefinite" rotate="auto">
+              <mpath href={`#done-${id}`} />
+            </animateMotion>
+          </circle>
+        </>
       )}
 
       {/* Edge label */}
@@ -84,12 +143,17 @@ export const AnimatedEdge = memo(function AnimatedEdge({
         <EdgeLabelRenderer>
           <div
             className={cn(
-              'absolute font-mono text-[9px] px-1.5 py-0.5 rounded pointer-events-none',
-              'bg-[#0F1220] border border-white/10 text-[#5C6280]',
-              isLive && 'border-[#0FD98A]/30 text-[#0FD98A]/70',
+              'absolute font-mono text-[8px] font-medium px-2 py-[3px] rounded-md pointer-events-none',
+              'bg-[var(--surface-1)] border shadow-lg',
+              isLive
+                ? 'border-[#00E5C3]/20 text-[#00E5C3]/80'
+                : 'border-white/[0.06] text-[var(--text-muted)]',
             )}
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              boxShadow: isLive
+                ? '0 0 12px rgba(0,229,195,0.1), 0 2px 8px rgba(0,0,0,0.3)'
+                : '0 2px 8px rgba(0,0,0,0.3)',
             }}
           >
             {String(label)}

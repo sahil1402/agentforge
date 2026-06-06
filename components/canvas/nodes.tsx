@@ -14,9 +14,12 @@ import type {
   NodeType,
 } from '@/lib/types'
 import { useGraphStore } from '@/store/graph-store'
-import { Brain, Wrench, Database, GitBranch, UserCheck } from 'lucide-react'
+import {
+  Brain, Wrench, Database, GitBranch, UserCheck,
+  Cpu, Sparkles, Zap, CircleDot,
+} from 'lucide-react'
 
-// ─── Shared node wrapper ──────────────────────────────────────────────────────
+// ─── Icons per node type ──────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const NODE_ICONS: Record<NodeType, React.FC<any>> = {
@@ -27,15 +30,16 @@ const NODE_ICONS: Record<NodeType, React.FC<any>> = {
   human_gate: UserCheck,
 }
 
+// ─── Shared node wrapper ──────────────────────────────────────────────────────
+
 interface NodeWrapperProps {
   id: string
   nodeType: NodeType
   selected?: boolean
   children: React.ReactNode
-  statusBadge?: React.ReactNode
 }
 
-function NodeWrapper({ id, nodeType, selected, children, statusBadge }: NodeWrapperProps) {
+function NodeWrapper({ id, nodeType, selected, children }: NodeWrapperProps) {
   const { activeNodeIds, completedNodeIds, failedNodeIds, setSelectedNode } = useGraphStore()
   const colors = NODE_COLORS[nodeType]
   const Icon = NODE_ICONS[nodeType]
@@ -52,86 +56,110 @@ function NodeWrapper({ id, nodeType, selected, children, statusBadge }: NodeWrap
     <div
       onClick={handleClick}
       className={cn(
-        'relative rounded-xl border cursor-pointer transition-all duration-200 min-w-[200px]',
-        'bg-[#0F1220] shadow-lg',
-        isActive    && 'ring-2 ring-[#0FD98A]/40 border-[#0FD98A]/50',
-        isFailed    && 'ring-2 ring-[#FF5252]/40 border-[#FF5252]/50',
-        isCompleted && !isActive && 'border-opacity-60',
-        selected    && !isActive && !isFailed && 'ring-2 ring-white/20 border-white/30',
-        !isActive && !isFailed && !selected && 'hover:border-opacity-60'
+        'relative rounded-[14px] cursor-pointer min-w-[220px] max-w-[260px]',
+        'glass-node',
+        isActive && 'node-running',
+        selected && !isActive && !isFailed && 'ring-1 ring-white/[0.15]',
       )}
       style={{
-        background: colors.bg,
-        borderColor: isActive ? 'rgba(15,217,138,0.5)'
-          : isFailed ? 'rgba(255,82,82,0.5)'
-          : colors.border,
-        // Running glow animation via inline style
+        background: isActive
+          ? `linear-gradient(135deg, rgba(0,229,195,0.06) 0%, ${colors.bg} 100%)`
+          : isFailed
+          ? 'rgba(255,107,129,0.05)'
+          : colors.bg,
+        borderColor: isActive
+          ? 'rgba(0,229,195,0.3)'
+          : isFailed
+          ? 'rgba(255,107,129,0.3)'
+          : selected
+          ? colors.border
+          : undefined,
         boxShadow: isActive
-          ? `0 0 0 0 rgba(15,217,138,0.15), 0 4px 24px rgba(0,0,0,0.4)`
-          : '0 4px 24px rgba(0,0,0,0.3)',
+          ? `0 0 30px rgba(0,229,195,0.1), 0 4px 32px rgba(0,0,0,0.4)`
+          : isFailed
+          ? `0 0 20px rgba(255,107,129,0.08), 0 4px 32px rgba(0,0,0,0.4)`
+          : 'var(--shadow-node)',
       }}
     >
-      {/* Top accent bar */}
+      {/* Top gradient accent strip */}
       <div
-        className="absolute top-0 left-4 right-4 h-[1.5px] rounded-full opacity-60"
-        style={{ background: colors.dot }}
+        className="node-accent-strip"
+        style={{ background: colors.gradient }}
       />
 
-      {/* Header */}
-      <div
-        className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-white/[0.05]"
-      >
+      {/* Header row */}
+      <div className="flex items-center gap-2.5 px-3.5 pt-3.5 pb-2">
+        {/* Icon badge */}
         <div
-          className="flex items-center justify-center w-6 h-6 rounded-md flex-shrink-0"
-          style={{ background: `${colors.dot}22` }}
+          className="flex items-center justify-center w-7 h-7 rounded-lg flex-shrink-0 relative"
+          style={{
+            background: `${colors.primary}14`,
+            boxShadow: `inset 0 0 0 1px ${colors.primary}20`,
+          }}
         >
-          <Icon size={12} color={colors.dot} />
-        </div>
-        <span
-          className="font-mono text-[9.5px] font-semibold tracking-widest uppercase"
-          style={{ color: colors.label }}
-        >
-          {NODE_LABELS[nodeType]}
-        </span>
-
-        {/* Status badge */}
-        <div className="ml-auto flex items-center gap-1.5">
+          <Icon size={13} color={colors.primary} strokeWidth={2.2} />
           {isActive && (
-            <span className="font-mono text-[8px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#0FD98A]/15 text-[#0FD98A]">
-              RUNNING
-            </span>
+            <span
+              className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full status-dot-pulse"
+              style={{ background: 'var(--status-active)', boxShadow: '0 0 6px rgba(0,229,195,0.5)' }}
+            />
           )}
-          {isCompleted && !isActive && (
-            <span className="font-mono text-[8px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#8B7FFE]/15 text-[#8B7FFE]">
-              DONE
-            </span>
-          )}
-          {isFailed && (
-            <span className="font-mono text-[8px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#FF5252]/15 text-[#FF5252]">
-              FAILED
-            </span>
-          )}
-          {statusBadge}
         </div>
+
+        {/* Type label + status */}
+        <div className="flex-1 min-w-0">
+          <span
+            className="font-mono text-[9px] font-semibold tracking-[0.14em] uppercase block"
+            style={{ color: colors.label }}
+          >
+            {NODE_LABELS[nodeType]}
+          </span>
+        </div>
+
+        {/* Status badges */}
+        {isActive && (
+          <span className="font-mono text-[8px] font-bold tracking-wider px-2 py-[3px] rounded-md bg-[#00E5C3]/10 text-[#00E5C3] border border-[#00E5C3]/20">
+            RUNNING
+          </span>
+        )}
+        {isCompleted && !isActive && (
+          <span className="font-mono text-[8px] font-bold tracking-wider px-2 py-[3px] rounded-md bg-[#9B8AFF]/10 text-[#9B8AFF] border border-[#9B8AFF]/20">
+            DONE
+          </span>
+        )}
+        {isFailed && (
+          <span className="font-mono text-[8px] font-bold tracking-wider px-2 py-[3px] rounded-md bg-[#FF6B81]/10 text-[#FF6B81] border border-[#FF6B81]/20">
+            FAILED
+          </span>
+        )}
       </div>
 
-      {/* Content */}
-      <div className="px-3 py-2.5">{children}</div>
+      {/* Divider */}
+      <div className="mx-3.5 h-px bg-white/[0.05]" />
 
-      {/* Input handle */}
+      {/* Content */}
+      <div className="px-3.5 py-3">{children}</div>
+
+      {/* Input handle — left */}
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2.5 !h-2.5 !rounded-full !border-2 !border-[var(--handle-color)] !bg-[#0A0C14]"
-        style={{ '--handle-color': colors.dot } as React.CSSProperties}
+        className="!w-3 !h-3 !rounded-full !border-[2px] !bg-[var(--surface-0)]"
+        style={{
+          borderColor: colors.handleBorder,
+          boxShadow: `0 0 0 2px ${colors.bg}`,
+        } as React.CSSProperties}
       />
 
-      {/* Output handle */}
+      {/* Output handle — right */}
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2.5 !h-2.5 !rounded-full !border-2 !border-[var(--handle-color)] !bg-[#0A0C14]"
-        style={{ '--handle-color': colors.dot } as React.CSSProperties}
+        className="!w-3 !h-3 !rounded-full !border-[2px] !bg-[var(--surface-0)]"
+        style={{
+          borderColor: colors.handleBorder,
+          boxShadow: `0 0 0 2px ${colors.bg}`,
+        } as React.CSSProperties}
       />
     </div>
   )
@@ -144,29 +172,41 @@ export const AgentNode = memo(function AgentNode({
 }: NodeProps & { data: AgentNodeData }) {
   return (
     <NodeWrapper id={id} nodeType="agent" selected={selected}>
-      <div className="mb-1">
-        <p className="text-[13px] font-semibold text-[#F1F2F8] font-display leading-tight">
-          {data.label}
-        </p>
-        <p className="font-mono text-[9.5px] text-[#4A506A] mt-0.5">
-          {data.model} · temp {data.temperature}
-        </p>
+      {/* Name */}
+      <p className="text-[13px] font-semibold text-[var(--text-primary)] font-display leading-tight mb-1">
+        {data.label}
+      </p>
+
+      {/* Model + temp pill */}
+      <div className="flex items-center gap-1.5 mb-2.5">
+        <span className="flex items-center gap-1 font-mono text-[9px] px-1.5 py-[2px] rounded-md bg-[#9B8AFF]/8 text-[#9B8AFF]/80 border border-[#9B8AFF]/12">
+          <Cpu size={8} />
+          {data.model}
+        </span>
+        <span className="font-mono text-[9px] px-1.5 py-[2px] rounded-md bg-white/[0.03] text-[var(--text-muted)] border border-white/[0.05]">
+          t={data.temperature}
+        </span>
       </div>
+
+      {/* System prompt preview */}
       {data.systemPrompt && (
-        <p
-          className="text-[10.5px] text-[#9BA0BC] leading-[1.55] mt-2 border-l-2 pl-2 line-clamp-2"
-          style={{ borderColor: 'rgba(139,127,254,0.3)' }}
-        >
-          {data.systemPrompt}
-        </p>
+        <div className="relative mb-2">
+          <div className="absolute left-0 top-0 bottom-0 w-[2px] rounded-full bg-gradient-to-b from-[#9B8AFF]/40 to-transparent" />
+          <p className="text-[10.5px] text-[var(--text-secondary)] leading-[1.6] pl-2.5 line-clamp-2">
+            {data.systemPrompt}
+          </p>
+        </div>
       )}
+
+      {/* Tools list */}
       {data.tools.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-2">
+        <div className="flex flex-wrap gap-1">
           {data.tools.map((t) => (
             <span
               key={t}
-              className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#1A1F30] text-[#4A506A] border border-white/[0.06]"
+              className="flex items-center gap-1 font-mono text-[8px] px-1.5 py-[2px] rounded bg-[var(--surface-3)] text-[var(--text-muted)] border border-white/[0.04]"
             >
+              <Zap size={7} className="text-[#FFB547]/60" />
               {t}
             </span>
           ))}
@@ -183,17 +223,24 @@ export const ToolNode = memo(function ToolNode({
 }: NodeProps & { data: ToolNodeData }) {
   return (
     <NodeWrapper id={id} nodeType="tool" selected={selected}>
-      <p className="text-[13px] font-semibold text-[#F1F2F8] mb-0.5">{data.label}</p>
-      <p className="font-mono text-[9.5px] text-[#4A506A]">
-        fn: {data.functionName}
-      </p>
+      <p className="text-[13px] font-semibold text-[var(--text-primary)] font-display mb-1">{data.label}</p>
+
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="font-mono text-[9px] px-1.5 py-[2px] rounded-md bg-[#5CA4FF]/8 text-[#5CA4FF]/80 border border-[#5CA4FF]/12">
+          fn: {data.functionName}
+        </span>
+        <span className="font-mono text-[9px] px-1.5 py-[2px] rounded-md bg-white/[0.03] text-[var(--text-muted)] border border-white/[0.05]">
+          → {data.returnType}
+        </span>
+      </div>
+
       {data.description && (
-        <p
-          className="text-[10.5px] text-[#9BA0BC] leading-[1.55] mt-2 border-l-2 pl-2 line-clamp-2"
-          style={{ borderColor: 'rgba(66,165,245,0.3)' }}
-        >
-          {data.description}
-        </p>
+        <div className="relative">
+          <div className="absolute left-0 top-0 bottom-0 w-[2px] rounded-full bg-gradient-to-b from-[#5CA4FF]/40 to-transparent" />
+          <p className="text-[10.5px] text-[var(--text-secondary)] leading-[1.6] pl-2.5 line-clamp-2">
+            {data.description}
+          </p>
+        </div>
       )}
     </NodeWrapper>
   )
@@ -211,16 +258,24 @@ export const MemoryNode = memo(function MemoryNode({
   }
   return (
     <NodeWrapper id={id} nodeType="memory" selected={selected}>
-      <p className="text-[13px] font-semibold text-[#F1F2F8] mb-0.5">{data.label}</p>
-      <p className="font-mono text-[9.5px] text-[#4A506A]">
-        {backendLabels[data.backend]} · top-k {data.topK}
-      </p>
-      <p
-        className="text-[10.5px] text-[#9BA0BC] leading-[1.55] mt-2 border-l-2 pl-2"
-        style={{ borderColor: 'rgba(15,217,138,0.3)' }}
-      >
-        Collection: {data.collectionName}
-      </p>
+      <p className="text-[13px] font-semibold text-[var(--text-primary)] font-display mb-1">{data.label}</p>
+
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="flex items-center gap-1 font-mono text-[9px] px-1.5 py-[2px] rounded-md bg-[#00E5C3]/8 text-[#00E5C3]/80 border border-[#00E5C3]/12">
+          <Database size={8} />
+          {backendLabels[data.backend]}
+        </span>
+        <span className="font-mono text-[9px] px-1.5 py-[2px] rounded-md bg-white/[0.03] text-[var(--text-muted)] border border-white/[0.05]">
+          k={data.topK}
+        </span>
+      </div>
+
+      <div className="relative">
+        <div className="absolute left-0 top-0 bottom-0 w-[2px] rounded-full bg-gradient-to-b from-[#00E5C3]/40 to-transparent" />
+        <p className="text-[10.5px] text-[var(--text-secondary)] leading-[1.6] pl-2.5">
+          {data.collectionName}
+        </p>
+      </div>
     </NodeWrapper>
   )
 })
@@ -232,35 +287,40 @@ export const RouterNode = memo(function RouterNode({
 }: NodeProps & { data: RouterNodeData }) {
   return (
     <NodeWrapper id={id} nodeType="router" selected={selected}>
-      <p className="text-[13px] font-semibold text-[#F1F2F8] mb-0.5">{data.label}</p>
-      <p className="font-mono text-[9.5px] text-[#4A506A] mb-2">
-        condition router
-      </p>
-      <div
-        className="font-mono text-[9.5px] text-[#FFAA2C]/80 bg-[#1A1F30] rounded px-2 py-1.5 border border-[#FFAA2C]/10"
-      >
+      <p className="text-[13px] font-semibold text-[var(--text-primary)] font-display mb-1">{data.label}</p>
+
+      {/* Condition expression */}
+      <div className="font-mono text-[9.5px] text-[#FFB547]/70 bg-[#FFB547]/[0.05] rounded-lg px-2.5 py-2 border border-[#FFB547]/10 mb-2">
+        <span className="text-[#FFB547]/40 mr-1">if</span>
         {data.condition}
       </div>
-      <div className="flex flex-wrap gap-1 mt-2">
-        {data.routes.map((r) => (
+
+      {/* Route badges */}
+      <div className="flex flex-wrap gap-1">
+        {data.routes.map((r, i) => (
           <span
             key={r.label}
-            className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#FFAA2C]/10 text-[#FFAA2C]/70 border border-[#FFAA2C]/15"
+            className="flex items-center gap-1 font-mono text-[8px] px-1.5 py-[2px] rounded bg-[#FFB547]/[0.06] text-[#FFB547]/65 border border-[#FFB547]/10"
           >
-            → {r.label}
+            <CircleDot size={7} />
+            {r.label}
           </span>
         ))}
       </div>
 
-      {/* Router has multiple source handles */}
+      {/* Multiple source handles for routes */}
       {data.routes.map((r, i) => (
         <Handle
           key={r.label}
           id={r.label}
           type="source"
           position={Position.Right}
-          style={{ top: `${30 + i * 24}%` }}
-          className="!w-2.5 !h-2.5 !rounded-full !border-2 !border-[#FFAA2C]/50 !bg-[#0A0C14]"
+          style={{
+            top: `${30 + i * 22}%`,
+            borderColor: 'rgba(255,181,71,0.4)',
+            boxShadow: '0 0 0 2px rgba(255,181,71,0.05)',
+          }}
+          className="!w-3 !h-3 !rounded-full !border-[2px] !bg-[var(--surface-0)]"
         />
       ))}
     </NodeWrapper>
@@ -277,35 +337,42 @@ export const HumanGateNode = memo(function HumanGateNode({
 
   return (
     <NodeWrapper id={id} nodeType="human_gate" selected={selected}>
-      <p className="text-[13px] font-semibold text-[#F1F2F8] mb-0.5">{data.label}</p>
-      <p className="font-mono text-[9.5px] text-[#4A506A] mb-2">
-        timeout: {data.timeoutSeconds}s
-      </p>
-      <p
-        className="text-[10.5px] text-[#9BA0BC] leading-[1.55] border-l-2 pl-2 line-clamp-2"
-        style={{ borderColor: 'rgba(255,82,82,0.3)' }}
-      >
-        {data.prompt}
-      </p>
+      <p className="text-[13px] font-semibold text-[var(--text-primary)] font-display mb-1">{data.label}</p>
 
-      {/* Approval UI when gate is pending */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="font-mono text-[9px] px-1.5 py-[2px] rounded-md bg-[#FF6B81]/8 text-[#FF6B81]/70 border border-[#FF6B81]/12">
+          timeout: {data.timeoutSeconds}s
+        </span>
+      </div>
+
+      <div className="relative mb-2">
+        <div className="absolute left-0 top-0 bottom-0 w-[2px] rounded-full bg-gradient-to-b from-[#FF6B81]/40 to-transparent" />
+        <p className="text-[10.5px] text-[var(--text-secondary)] leading-[1.6] pl-2.5 line-clamp-2">
+          {data.prompt}
+        </p>
+      </div>
+
+      {/* Gate approval UI */}
       {isGatePending && (
-        <div className="mt-3 p-2 rounded-lg bg-[#FF5252]/10 border border-[#FF5252]/25">
-          <p className="text-[10px] text-[#FF5252] font-mono font-semibold mb-2">
-            ⚠ Awaiting approval
-          </p>
+        <div className="mt-1 p-2.5 rounded-xl bg-[#FF6B81]/[0.06] border border-[#FF6B81]/20">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Sparkles size={10} className="text-[#FF6B81]" />
+            <span className="font-mono text-[9px] font-bold text-[#FF6B81] tracking-wider">
+              AWAITING APPROVAL
+            </span>
+          </div>
           <div className="flex gap-2">
             <button
-              className="flex-1 h-6 rounded text-[10px] font-medium bg-[#0FD98A]/15 text-[#0FD98A] border border-[#0FD98A]/25 hover:bg-[#0FD98A]/25 transition-colors"
-              onClick={(e) => { e.stopPropagation(); /* dispatch approve */ }}
+              className="flex-1 h-7 rounded-lg text-[10px] font-semibold bg-[#00E5C3]/10 text-[#00E5C3] border border-[#00E5C3]/20 hover:bg-[#00E5C3]/18 transition-all active:scale-[0.97]"
+              onClick={(e) => { e.stopPropagation() }}
             >
-              Approve
+              ✓ Approve
             </button>
             <button
-              className="flex-1 h-6 rounded text-[10px] font-medium bg-[#FF5252]/15 text-[#FF5252] border border-[#FF5252]/25 hover:bg-[#FF5252]/25 transition-colors"
-              onClick={(e) => { e.stopPropagation(); /* dispatch reject */ }}
+              className="flex-1 h-7 rounded-lg text-[10px] font-semibold bg-[#FF6B81]/10 text-[#FF6B81] border border-[#FF6B81]/20 hover:bg-[#FF6B81]/18 transition-all active:scale-[0.97]"
+              onClick={(e) => { e.stopPropagation() }}
             >
-              Reject
+              ✕ Reject
             </button>
           </div>
         </div>
@@ -314,7 +381,7 @@ export const HumanGateNode = memo(function HumanGateNode({
   )
 })
 
-// ─── nodeTypes map (passed to ReactFlow) ─────────────────────────────────────
+// ─── nodeTypes map ───────────────────────────────────────────────────────────
 
 export const nodeTypes = {
   agent:      AgentNode,

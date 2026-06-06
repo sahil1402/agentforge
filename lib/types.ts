@@ -54,7 +54,7 @@ export type AnyNodeData =
   | RouterNodeData
   | HumanGateNodeData
 
-// ─── Graph Schema (what we serialize to PostgreSQL) ──────────────────────────
+// ─── Graph Schema ────────────────────────────────────────────────────────────
 
 export interface GraphNode {
   id: string
@@ -134,14 +134,64 @@ export interface GraphEntry {
   updatedAt: string
 }
 
-// ─── Node color map (used across canvas + sidebar) ───────────────────────────
+// ─── Node Visual System ──────────────────────────────────────────────────────
 
-export const NODE_COLORS: Record<NodeType, { bg: string; border: string; dot: string; label: string }> = {
-  agent:      { bg: 'rgba(139,127,254,0.08)', border: 'rgba(139,127,254,0.28)', dot: '#8B7FFE', label: 'rgba(139,127,254,0.7)' },
-  tool:       { bg: 'rgba(66,165,245,0.07)',  border: 'rgba(66,165,245,0.25)',  dot: '#42A5F5', label: 'rgba(66,165,245,0.7)' },
-  memory:     { bg: 'rgba(15,217,138,0.06)',  border: 'rgba(15,217,138,0.22)',  dot: '#0FD98A', label: 'rgba(15,217,138,0.7)' },
-  router:     { bg: 'rgba(255,170,44,0.07)',  border: 'rgba(255,170,44,0.25)',  dot: '#FFAA2C', label: 'rgba(255,170,44,0.7)' },
-  human_gate: { bg: 'rgba(255,82,82,0.07)',   border: 'rgba(255,82,82,0.25)',   dot: '#FF5252', label: 'rgba(255,82,82,0.7)' },
+export interface NodeColorConfig {
+  primary: string       // Main accent color
+  bg: string            // Card background tint
+  glow: string          // Glow/shadow color
+  border: string        // Border color
+  label: string         // Label text color
+  gradient: string      // Gradient for accent strip
+  handleBorder: string  // Handle ring color
+}
+
+export const NODE_COLORS: Record<NodeType, NodeColorConfig> = {
+  agent: {
+    primary:     '#9B8AFF',
+    bg:          'rgba(155, 138, 255, 0.04)',
+    glow:        'rgba(155, 138, 255, 0.12)',
+    border:      'rgba(155, 138, 255, 0.18)',
+    label:       'rgba(155, 138, 255, 0.75)',
+    gradient:    'linear-gradient(90deg, #9B8AFF, #C4B8FF)',
+    handleBorder:'rgba(155, 138, 255, 0.5)',
+  },
+  tool: {
+    primary:     '#5CA4FF',
+    bg:          'rgba(92, 164, 255, 0.04)',
+    glow:        'rgba(92, 164, 255, 0.12)',
+    border:      'rgba(92, 164, 255, 0.18)',
+    label:       'rgba(92, 164, 255, 0.75)',
+    gradient:    'linear-gradient(90deg, #5CA4FF, #8EC4FF)',
+    handleBorder:'rgba(92, 164, 255, 0.5)',
+  },
+  memory: {
+    primary:     '#00E5C3',
+    bg:          'rgba(0, 229, 195, 0.03)',
+    glow:        'rgba(0, 229, 195, 0.10)',
+    border:      'rgba(0, 229, 195, 0.15)',
+    label:       'rgba(0, 229, 195, 0.75)',
+    gradient:    'linear-gradient(90deg, #00E5C3, #5CFFE0)',
+    handleBorder:'rgba(0, 229, 195, 0.5)',
+  },
+  router: {
+    primary:     '#FFB547',
+    bg:          'rgba(255, 181, 71, 0.04)',
+    glow:        'rgba(255, 181, 71, 0.10)',
+    border:      'rgba(255, 181, 71, 0.18)',
+    label:       'rgba(255, 181, 71, 0.75)',
+    gradient:    'linear-gradient(90deg, #FFB547, #FFD08A)',
+    handleBorder:'rgba(255, 181, 71, 0.5)',
+  },
+  human_gate: {
+    primary:     '#FF6B81',
+    bg:          'rgba(255, 107, 129, 0.04)',
+    glow:        'rgba(255, 107, 129, 0.10)',
+    border:      'rgba(255, 107, 129, 0.18)',
+    label:       'rgba(255, 107, 129, 0.75)',
+    gradient:    'linear-gradient(90deg, #FF6B81, #FFA0B0)',
+    handleBorder:'rgba(255, 107, 129, 0.5)',
+  },
 }
 
 export const NODE_LABELS: Record<NodeType, string> = {
@@ -150,6 +200,14 @@ export const NODE_LABELS: Record<NodeType, string> = {
   memory:     'Memory',
   router:     'Router',
   human_gate: 'Human Gate',
+}
+
+export const NODE_DESCRIPTIONS: Record<NodeType, string> = {
+  agent:      'LLM agent with model, prompt & tools',
+  tool:       'Python function with typed I/O',
+  memory:     'Vector / graph retrieval store',
+  router:     'Conditional branching logic',
+  human_gate: 'Human approval checkpoint',
 }
 
 export const AVAILABLE_MODELS = [

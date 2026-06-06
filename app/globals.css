@@ -1,37 +1,369 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Design Tokens ────────────────────────────────────────────────────────── */
+
+:root {
+  /* Surfaces */
+  --void:        #04060C;
+  --surface-0:   #080B14;
+  --surface-1:   #0C1019;
+  --surface-2:   #10141F;
+  --surface-3:   #151A28;
+  --surface-4:   #1B2132;
+
+  /* Text */
+  --text-primary:   #EEF0F6;
+  --text-secondary: #8B92A8;
+  --text-muted:     #4A5068;
+  --text-ghost:     #2A3045;
+
+  /* Accent palette */
+  --accent-violet:  #9B8AFF;
+  --accent-cyan:    #00E5C3;
+  --accent-amber:   #FFB547;
+  --accent-rose:    #FF6B81;
+  --accent-blue:    #5CA4FF;
+
+  /* Node-specific */
+  --node-agent:       #9B8AFF;
+  --node-agent-bg:    rgba(155, 138, 255, 0.06);
+  --node-agent-glow:  rgba(155, 138, 255, 0.12);
+
+  --node-tool:        #5CA4FF;
+  --node-tool-bg:     rgba(92, 164, 255, 0.06);
+  --node-tool-glow:   rgba(92, 164, 255, 0.12);
+
+  --node-memory:      #00E5C3;
+  --node-memory-bg:   rgba(0, 229, 195, 0.05);
+  --node-memory-glow: rgba(0, 229, 195, 0.10);
+
+  --node-router:      #FFB547;
+  --node-router-bg:   rgba(255, 181, 71, 0.06);
+  --node-router-glow: rgba(255, 181, 71, 0.10);
+
+  --node-gate:        #FF6B81;
+  --node-gate-bg:     rgba(255, 107, 129, 0.06);
+  --node-gate-glow:   rgba(255, 107, 129, 0.10);
+
+  /* Status */
+  --status-active:    #00E5C3;
+  --status-complete:  #9B8AFF;
+  --status-error:     #FF6B81;
+  --status-pending:   #FFB547;
+
+  /* Border */
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.09);
+  --border-hover:   rgba(255, 255, 255, 0.14);
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* Shadows */
+  --shadow-node: 0 4px 32px rgba(0,0,0,0.5), 0 0 0 1px var(--border-subtle);
+  --shadow-panel: 0 8px 40px rgba(0,0,0,0.5);
+  --shadow-glow-active: 0 0 30px rgba(0, 229, 195, 0.15), 0 0 60px rgba(0, 229, 195, 0.05);
+}
+
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--void);
+  color: var(--text-primary);
+  font-family: 'Outfit', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── React Flow Overrides ─────────────────────────────────────────────────── */
+
 .react-flow__renderer { background: transparent !important; }
 .react-flow__background { background: transparent !important; }
+
+.react-flow__controls {
+  border-radius: var(--radius-md) !important;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle) !important;
+  box-shadow: var(--shadow-panel) !important;
+  background: var(--surface-1) !important;
+  backdrop-filter: blur(12px);
+}
+
 .react-flow__controls-button {
-  background: #0D1017 !important;
-  border-color: rgba(255,255,255,0.07) !important;
-  color: #9BA0BC !important;
-  width: 24px !important; height: 24px !important;
+  background: transparent !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-muted) !important;
+  width: 28px !important;
+  height: 28px !important;
+  transition: all 0.15s ease !important;
 }
-.react-flow__controls-button:hover { background: #161B2C !important; color: #F1F2F8 !important; }
-.react-flow__controls-button svg { fill: currentColor !important; max-width: 10px !important; }
-.react-flow__edge-path { transition: stroke 0.2s, stroke-width 0.2s; }
-.react-flow__edge.selected .react-flow__edge-path { stroke: rgba(139,127,254,0.7) !important; stroke-width: 2 !important; }
-.react-flow__minimap { border-radius: 10px !important; overflow: hidden; border: 1px solid rgba(255,255,255,0.07) !important; }
-.react-flow__minimap-mask { fill: rgba(5,6,10,0.7) !important; }
-.react-flow__handle:hover { filter: brightness(1.4); box-shadow: 0 0 0 4px rgba(139,127,254,0.15); transition: all 0.15s; }
-.react-flow__nodesselection-rect { border-color: rgba(139,127,254,0.4) !important; background: rgba(139,127,254,0.04) !important; }
+.react-flow__controls-button:hover {
+  background: var(--surface-3) !important;
+  color: var(--text-primary) !important;
+}
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+  max-width: 12px !important;
+}
 
-::-webkit-scrollbar { width: 4px; height: 4px; }
+.react-flow__edge-path {
+  transition: stroke 0.3s ease, stroke-width 0.3s ease, filter 0.3s ease;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent-violet) !important;
+  stroke-width: 2.5 !important;
+  filter: drop-shadow(0 0 6px rgba(155,138,255,0.3));
+}
+
+.react-flow__minimap {
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle) !important;
+  box-shadow: var(--shadow-panel) !important;
+  backdrop-filter: blur(12px);
+}
+.react-flow__minimap-mask {
+  fill: rgba(4, 6, 12, 0.8) !important;
+}
+
+.react-flow__handle {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.react-flow__handle:hover {
+  filter: brightness(1.5) !important;
+  box-shadow: 0 0 0 5px rgba(155, 138, 255, 0.12), 0 0 12px rgba(155, 138, 255, 0.2) !important;
+  transform: scale(1.3) !important;
+}
+
+.react-flow__nodesselection-rect {
+  border-color: rgba(155, 138, 255, 0.35) !important;
+  background: rgba(155, 138, 255, 0.03) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.react-flow__connection-line {
+  stroke: var(--accent-violet) !important;
+  stroke-width: 2 !important;
+  opacity: 0.6;
+}
+
+/* ─── Canvas Background Atmosphere ─────────────────────────────────────────── */
+
+.canvas-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 50%, rgba(155,138,255,0.03) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 30% 70%, rgba(0,229,195,0.02) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 70% 30%, rgba(92,164,255,0.02) 0%, transparent 60%);
+}
+
+/* ─── Glassmorphism Utility ────────────────────────────────────────────────── */
+
+.glass {
+  background: rgba(12, 16, 25, 0.75);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--border-subtle);
+}
+
+.glass-node {
+  background: rgba(12, 16, 25, 0.8);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-node:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-node), 0 0 40px rgba(155,138,255,0.04);
+}
+
+/* ─── Node Accent Strip ────────────────────────────────────────────────────── */
+
+.node-accent-strip {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+/* ─── Running Node Animation ───────────────────────────────────────────────── */
+
+@keyframes nodePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 229, 195, 0.2), var(--shadow-node); }
+  50% { box-shadow: 0 0 20px 4px rgba(0, 229, 195, 0.1), var(--shadow-node); }
+}
+
+@keyframes borderFlow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.node-running {
+  animation: nodePulse 2s ease-in-out infinite;
+}
+
+.node-running::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--status-active) 25%,
+    transparent 50%,
+    var(--status-active) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: borderFlow 2s linear infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ─── Edge Particle Dots ───────────────────────────────────────────────────── */
+
+@keyframes edgeFlow {
+  0% { stroke-dashoffset: 24; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.edge-flow-active {
+  animation: edgeFlow 0.8s linear infinite;
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
-
-input[type="range"] { -webkit-appearance: none; height: 4px; border-radius: 2px; cursor: pointer; }
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
-  background: #8B7FFE; border: 2px solid #0D1017; cursor: pointer;
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
 }
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ─── Custom Range Inputs ──────────────────────────────────────────────────── */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  cursor: pointer;
+  background: var(--surface-3);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-violet);
+  border: 2px solid var(--surface-0);
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(155, 138, 255, 0.3);
+  transition: all 0.15s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 12px rgba(155, 138, 255, 0.5);
+}
+
+/* ─── Selection highlight ──────────────────────────────────────────────────── */
+
+::selection {
+  background: rgba(155, 138, 255, 0.25);
+  color: var(--text-primary);
+}
+
+/* ─── Typography Utilities ─────────────────────────────────────────────────── */
 
 @layer utilities {
   .font-mono { font-family: 'JetBrains Mono', monospace; }
-  .font-display { font-family: 'Syne', 'DM Sans', sans-serif; }
-  .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .font-display { font-family: 'Syne', 'Outfit', sans-serif; }
+  .font-body { font-family: 'Outfit', system-ui, sans-serif; }
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* ─── Skeleton Loading ─────────────────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--surface-3) 50%,
+    var(--surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Trace Panel Token Cursor ─────────────────────────────────────────────── */
+
+@keyframes tokenBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.token-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: var(--status-active);
+  border-radius: 1px;
+  margin-left: 1px;
+  vertical-align: middle;
+  animation: tokenBlink 0.8s ease-in-out infinite;
+}
+
+/* ─── Status Dot Pulse ─────────────────────────────────────────────────────── */
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.status-dot-pulse {
+  animation: dotPulse 1.5s ease-in-out infinite;
 }
