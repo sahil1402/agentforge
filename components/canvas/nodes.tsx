@@ -41,8 +41,10 @@ function NodeWrapper({ id, nodeType, selected, children }: NodeWrapperProps) {
       )}
       style={{
         background: isActive
-          ? `linear-gradient(135deg, rgba(0,229,195,0.10), ${colors.bg})`
-          : isFailed ? 'rgba(255,107,129,0.08)' : colors.bg,
+          ? `linear-gradient(135deg, rgba(0,229,195,0.12), transparent), var(--surface-2)`
+          : isFailed
+          ? `linear-gradient(135deg, rgba(255,107,129,0.10), transparent), var(--surface-2)`
+          : `linear-gradient(135deg, ${colors.bg}, transparent), var(--surface-2)`,
         borderColor: isActive ? 'rgba(0,229,195,0.35)' : isFailed ? 'rgba(255,107,129,0.35)' : selected ? colors.border : undefined,
         boxShadow: isActive
           ? '0 0 30px rgba(0,229,195,0.12), 0 4px 32px rgba(0,0,0,0.4)'
@@ -53,7 +55,7 @@ function NodeWrapper({ id, nodeType, selected, children }: NodeWrapperProps) {
       <div className="node-accent-strip" style={{ background: colors.gradient }} />
 
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 pt-3 pb-1.5">
+      <div className="flex items-center gap-2 px-3.5 pt-3.5 pb-2">
         <div
           className="flex items-center justify-center w-6 h-6 rounded-md flex-shrink-0 relative"
           style={{ background: `${colors.primary}14`, boxShadow: `inset 0 0 0 1px ${colors.primary}20` }}
@@ -84,9 +86,9 @@ function NodeWrapper({ id, nodeType, selected, children }: NodeWrapperProps) {
         )}
       </div>
 
-      <div className="mx-3 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
+      <div className="mx-3.5 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
 
-      <div className="px-3 py-2.5">{children}</div>
+      <div className="px-3.5 py-3">{children}</div>
 
       {/* Handles */}
       <Handle type="target" position={Position.Left}

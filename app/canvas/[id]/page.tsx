@@ -10,8 +10,7 @@ import {
   TestTube, Rocket, History, Layers, GripVertical,
 } from 'lucide-react'
 import { useGraphStore } from '@/store/graph-store'
-import { NODE_COLORS, NODE_LABELS, NODE_DESCRIPTIONS, type NodeType } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import { NODE_COLORS, type NodeType } from '@/lib/types'
 
 const Canvas          = dynamic(() => import('@/components/canvas/canvas'),           { ssr: false })
 const NodeConfigPanel = dynamic(() => import('@/components/canvas/node-config-panel'), { ssr: false })
@@ -40,7 +39,7 @@ function PaletteNode({ type, label, Icon, desc }: typeof PALETTE_NODES[0]) {
     <div
       draggable
       onDragStart={onDragStart}
-      className="group relative flex items-center gap-2.5 px-2.5 py-2 rounded-[10px] cursor-grab transition-all duration-150 hover:scale-[1.02] active:cursor-grabbing active:scale-[0.97]"
+      className="af-palette-node group relative flex items-center gap-2.5 px-2.5 py-2 rounded-[10px] cursor-grab"
       style={{
         background: colors.bg,
         border: `1px solid ${colors.border}`,
@@ -48,13 +47,13 @@ function PaletteNode({ type, label, Icon, desc }: typeof PALETTE_NODES[0]) {
       title={`Drag to add ${label}`}
     >
       <div
-        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+        className="w-[30px] h-[30px] rounded-lg flex items-center justify-center flex-shrink-0"
         style={{
           background: `${colors.primary}14`,
           boxShadow: `inset 0 0 0 1px ${colors.primary}20`,
         }}
       >
-        <Icon size={13} style={{ color: colors.primary }} strokeWidth={2} />
+        <Icon size={14} style={{ color: colors.primary }} strokeWidth={2} />
       </div>
       <div className="min-w-0">
         <p className="text-[11px] font-semibold leading-none mb-[2px]" style={{ color: 'var(--text-primary)', fontFamily: 'Syne, sans-serif' }}>{label}</p>
@@ -115,10 +114,10 @@ function TopToolbar({ graphId }: { graphId: string }) {
       >
         <ChevronLeft size={13} className="group-hover:-translate-x-0.5 transition-transform" />
         <div
-          className="w-5 h-5 rounded-md flex items-center justify-center"
+          className="w-6 h-6 rounded-md flex items-center justify-center"
           style={{ background: 'linear-gradient(135deg, #9B8AFF, #5CA4FF)' }}
         >
-          <Zap size={10} className="text-white" strokeWidth={2.5} />
+          <Zap size={12} className="text-white" strokeWidth={2.5} />
         </div>
       </button>
 
@@ -148,15 +147,7 @@ function TopToolbar({ graphId }: { graphId: string }) {
         <button
           onClick={handleSave}
           disabled={!isDirty || saving}
-          className={cn(
-            'h-7 px-2.5 rounded-md text-[10px] font-medium flex items-center gap-1.5 transition-all',
-            isDirty ? 'opacity-100' : 'opacity-30 cursor-default'
-          )}
-          style={{
-            background: isDirty ? 'var(--surface-3)' : 'transparent',
-            border: isDirty ? '1px solid var(--border-default)' : '1px solid transparent',
-            color: isDirty ? 'var(--text-secondary)' : 'var(--text-ghost)',
-          }}
+          className="af-btn af-btn-save"
         >
           <Save size={11} />
           {saving ? 'Saving…' : 'Save'}
@@ -167,38 +158,27 @@ function TopToolbar({ graphId }: { graphId: string }) {
 
         <div className="w-px h-4" style={{ background: 'var(--border-subtle)' }} />
 
-        <button className="w-7 h-7 flex items-center justify-center rounded-md transition-all hover:bg-white/[0.04]" style={{ color: 'var(--text-ghost)' }} title="History">
+        <button className="af-icon-btn" title="History">
           <History size={13} />
         </button>
-        <button className="w-7 h-7 flex items-center justify-center rounded-md transition-all hover:bg-white/[0.04]" style={{ color: 'var(--text-ghost)' }} title="Tests">
+        <button className="af-icon-btn" title="Tests">
           <TestTube size={13} />
         </button>
 
         <div className="w-px h-4" style={{ background: 'var(--border-subtle)' }} />
 
-        <button
-          className="h-7 px-2.5 rounded-md text-[10px] font-semibold flex items-center gap-1.5 transition-all"
-          style={{ background: 'rgba(155,138,255,0.08)', border: '1px solid rgba(155,138,255,0.2)', color: '#9B8AFF' }}
-        >
+        <button className="af-btn af-btn-deploy">
           <Rocket size={11} />
           Deploy
         </button>
 
         {isRunning ? (
-          <button
-            onClick={() => clearRunState()}
-            className="h-7 px-3 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-all active:scale-[0.97]"
-            style={{ background: 'rgba(255,107,129,0.1)', border: '1px solid rgba(255,107,129,0.25)', color: '#FF6B81' }}
-          >
+          <button onClick={() => clearRunState()} className="af-btn af-btn-stop">
             <Square size={9} className="fill-current" />
             Stop
           </button>
         ) : (
-          <button
-            onClick={handleRun}
-            className="h-7 px-3 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-all active:scale-[0.97]"
-            style={{ background: 'rgba(0,229,195,0.1)', border: '1px solid rgba(0,229,195,0.25)', color: '#00E5C3', boxShadow: '0 0 16px rgba(0,229,195,0.06)' }}
-          >
+          <button onClick={handleRun} className="af-btn af-btn-run">
             <Play size={9} className="fill-current" />
             Run
           </button>
