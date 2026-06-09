@@ -41,8 +41,8 @@ function NodeWrapper({ id, nodeType, selected, children }: NodeWrapperProps) {
       )}
       style={{
         background: isActive
-          ? `linear-gradient(135deg, rgba(0,229,195,0.08), ${colors.bg})`
-          : isFailed ? 'rgba(255,107,129,0.06)' : colors.bg.replace('0.04', '0.06'),
+          ? `linear-gradient(135deg, rgba(0,229,195,0.10), ${colors.bg})`
+          : isFailed ? 'rgba(255,107,129,0.08)' : colors.bg,
         borderColor: isActive ? 'rgba(0,229,195,0.35)' : isFailed ? 'rgba(255,107,129,0.35)' : selected ? colors.border : undefined,
         boxShadow: isActive
           ? '0 0 30px rgba(0,229,195,0.12), 0 4px 32px rgba(0,0,0,0.4)'
