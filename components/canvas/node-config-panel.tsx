@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Trash2, Copy, Cpu, Database, Sparkles,
@@ -11,43 +11,9 @@ import { NODE_COLORS, NODE_LABELS, AVAILABLE_MODELS, type NodeType } from '@/lib
 import type { AgentNodeData, ToolNodeData, MemoryNodeData, RouterNodeData, HumanGateNodeData } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { CodeEditor, approxTokenCount } from './code-editor'
+import { useTools } from '@/lib/use-tools'
 
-// ─── Tool Registry fetcher (module-level cache for instant panel reopens) ─────
-
-type RegisteredTool = {
-  id: string
-  name: string
-  description: string
-  category: string
-}
-
-let toolsCache: RegisteredTool[] | null = null
-let toolsFetchPromise: Promise<RegisteredTool[]> | null = null
-
-function fetchTools(): Promise<RegisteredTool[]> {
-  if (!toolsFetchPromise) {
-    toolsFetchPromise = fetch('/api/tools').then((r) => r.json())
-  }
-  return toolsFetchPromise
-}
-
-function useTools() {
-  const [tools, setTools] = useState<RegisteredTool[]>(toolsCache ?? [])
-  const [loading, setLoading] = useState(!toolsCache)
-
-  useEffect(() => {
-    let cancelled = false
-    fetchTools().then((t) => {
-      if (cancelled) return
-      toolsCache = t
-      setTools(t)
-      setLoading(false)
-    })
-    return () => { cancelled = true }
-  }, [])
-
-  return { tools, loading }
-}
+// Tool registry uses the shared `useTools` hook from `lib/use-tools`.
 
 // ─── Model pricing (USD per 1M tokens — approximate; update as needed) ────────
 
