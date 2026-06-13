@@ -10,6 +10,7 @@ import { useGraphStore, selectSelectedNode } from '@/store/graph-store'
 import { NODE_COLORS, NODE_LABELS, AVAILABLE_MODELS, type NodeType } from '@/lib/types'
 import type { AgentNodeData, ToolNodeData, MemoryNodeData, RouterNodeData, HumanGateNodeData } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { CodeEditor, approxTokenCount } from './code-editor'
 
 // ─── Tool Registry fetcher (module-level cache for instant panel reopens) ─────
 
@@ -408,12 +409,22 @@ function AgentConfig({ id, data }: { id: string; data: AgentNodeData }) {
       </PanelSection>
 
       <PanelSection title="System Prompt" icon={<Sparkles size={10} />}>
-        <TextArea
+        <CodeEditor
           value={data.systemPrompt}
           onChange={(v) => upd({ systemPrompt: v })}
-          rows={5}
           placeholder="You are a helpful assistant..."
+          minHeight="100px"
+          maxHeight="280px"
+          language="markdown"
         />
+        <div className="flex items-center justify-between gap-2 text-[9px] font-mono text-[var(--text-ghost)] mt-1.5 px-0.5">
+          <span title="Markdown supported · headings, **bold**, *italic*, `code`, [links](url)">
+            MD
+          </span>
+          <span title="Approximate — actual count varies by tokenizer">
+            ~{approxTokenCount(data.systemPrompt).toLocaleString()} tokens
+          </span>
+        </div>
       </PanelSection>
 
       <PanelSection title="Tools" icon={<Wrench size={10} />}>
