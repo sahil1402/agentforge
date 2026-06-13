@@ -108,3 +108,17 @@ enum TestResult {
   FAIL
   PENDING
 }
+
+model Tool {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String
+  paramSchema  Json     // JSON Schema for input parameters
+  returnSchema Json?    // Optional JSON Schema for return value
+  code         String   // Python function body (executed in Week 4 sandbox)
+  category     String   @default("custom") // "builtin" | "custom"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("tools")
+}
