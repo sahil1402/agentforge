@@ -1,12 +1,65 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Trash2, Copy, Cpu, Database, Sparkles } from 'lucide-react'
+import {
+  X, Trash2, Copy, Cpu, Database, Sparkles,
+  Plus, DollarSign, Wrench, Check,
+} from 'lucide-react'
 import { useGraphStore, selectSelectedNode } from '@/store/graph-store'
 import { NODE_COLORS, NODE_LABELS, AVAILABLE_MODELS, type NodeType } from '@/lib/types'
 import type { AgentNodeData, ToolNodeData, MemoryNodeData, RouterNodeData, HumanGateNodeData } from '@/lib/types'
 import { cn } from '@/lib/utils'
+
+// ─── Tool Registry fetcher (module-level cache for instant panel reopens) ─────
+
+type RegisteredTool = {
+  id: string
+  name: string
+  description: string
+  category: string
+}
+
+let toolsCache: RegisteredTool[] | null = null
+let toolsFetchPromise: Promise<RegisteredTool[]> | null = null
+
+function fetchTools(): Promise<RegisteredTool[]> {
+  if (!toolsFetchPromise) {
+    toolsFetchPromise = fetch('/api/tools').then((r) => r.json())
+  }
+  return toolsFetchPromise
+}
+
+function useTools() {
+  const [tools, setTools] = useState<RegisteredTool[]>(toolsCache ?? [])
+  const [loading, setLoading] = useState(!toolsCache)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchTools().then((t) => {
+      if (cancelled) return
+      toolsCache = t
+      setTools(t)
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  return { tools, loading }
+}
+
+// ─── Model pricing (USD per 1M tokens — approximate; update as needed) ────────
+
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  'gpt-4o':            { input: 2.5,  output: 10  },
+  'gpt-4o-mini':       { input: 0.15, output: 0.6 },
+  'claude-3-5-sonnet': { input: 3,    output: 15  },
+  'claude-3-opus':     { input: 15,   output: 75  },
+  'claude-3-haiku':    { input: 0.25, output: 1.25},
+  'mistral-7b':        { input: 0.25, output: 0.25},
+  'mistral-large':     { input: 2,    output: 6   },
+  'llama-3-70b':       { input: 0.6,  output: 0.6 },
+}
 
 // ─── Reusable form components with premium styling ───────────────────────────
 
@@ -134,6 +187,38 @@ function SliderField({
   )
 }
 
+function ToggleField({
+  label, hint, checked, onChange, color = '#9B8AFF',
+}: {
+  label: string
+  hint?: string
+  checked: boolean
+  onChange: (v: boolean) => void
+  color?: string
+}) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[var(--surface-0)] border border-[var(--border-subtle)] hover:border-[var(--border-hover)] transition-all text-left"
+    >
+      <div
+        className="w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-all"
+        style={{
+          background: checked ? color : 'transparent',
+          border: `1px solid ${checked ? color : 'var(--border-default)'}`,
+          boxShadow: checked ? `0 0 8px ${color}40` : 'none',
+        }}
+      >
+        {checked && <Check size={10} className="text-white" strokeWidth={3} />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11.5px] font-medium text-[var(--text-primary)] leading-tight">{label}</p>
+        {hint && <p className="text-[9.5px] text-[var(--text-ghost)] mt-0.5 leading-tight">{hint}</p>}
+      </div>
+    </button>
+  )
+}
+
 function PanelSection({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="px-4 py-3.5 border-b border-[var(--border-subtle)]">
@@ -144,6 +229,125 @@ function PanelSection({ title, icon, children }: { title: string; icon?: React.R
         </p>
       </div>
       <div className="space-y-3">{children}</div>
+    </div>
+  )
+}
+
+// ─── Tool multi-select picker ─────────────────────────────────────────────────
+
+function ToolMultiSelect({
+  selected,
+  onChange,
+}: {
+  selected: string[]
+  onChange: (next: string[]) => void
+}) {
+  const { tools, loading } = useTools()
+  const [open, setOpen] = useState(false)
+
+  const toggle = (name: string) => {
+    if (selected.includes(name)) {
+      onChange(selected.filter((t) => t !== name))
+    } else {
+      onChange([...selected, name])
+    }
+  }
+
+  const assigned = tools.filter((t) => selected.includes(t.name))
+  const available = tools.filter((t) => !selected.includes(t.name))
+
+  // Tools selected but not in registry (e.g. deleted) — render as ghost chips
+  const orphaned = selected.filter((name) => !tools.some((t) => t.name === name))
+
+  return (
+    <div className="space-y-2">
+      {/* Assigned chips */}
+      <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+        {assigned.length === 0 && orphaned.length === 0 ? (
+          <span className="text-[11px] text-[var(--text-ghost)] italic">No tools assigned</span>
+        ) : (
+          <>
+            {assigned.map((t) => (
+              <span
+                key={t.id}
+                title={t.description}
+                className="font-mono text-[9px] px-2 py-[3px] rounded-md bg-[var(--surface-3)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center gap-1.5"
+              >
+                <Wrench size={9} className="text-[#5CA4FF]" />
+                {t.name}
+                <button
+                  onClick={() => toggle(t.name)}
+                  className="text-[var(--text-ghost)] hover:text-[#FF6B81] transition-colors leading-none"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {orphaned.map((name) => (
+              <span
+                key={name}
+                title="Not in tool registry"
+                className="font-mono text-[9px] px-2 py-[3px] rounded-md bg-[#FF6B81]/8 text-[#FF6B81]/80 border border-[#FF6B81]/20 flex items-center gap-1.5"
+              >
+                {name}
+                <button
+                  onClick={() => toggle(name)}
+                  className="hover:text-[#FF6B81] transition-colors leading-none"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* Add tool button + dropdown */}
+      <div className="relative">
+        <button
+          onClick={() => setOpen(!open)}
+          disabled={loading}
+          className="w-full h-8 px-2.5 rounded-lg text-[11px] font-medium text-[#9B8AFF] hover:text-[#C4B8FF] border border-dashed border-[var(--border-subtle)] hover:border-[#9B8AFF]/30 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+        >
+          <Plus size={11} />
+          {loading ? 'Loading tools…' : 'Add tool'}
+        </button>
+
+        {open && (
+          <>
+            {/* Click-outside catcher */}
+            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+            <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-[var(--surface-1)] border border-[var(--border-subtle)] rounded-lg shadow-2xl max-h-[260px] overflow-y-auto">
+              {available.length === 0 ? (
+                <div className="px-3 py-2.5 text-[11px] text-[var(--text-ghost)] italic">
+                  All tools assigned
+                </div>
+              ) : (
+                available.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => { toggle(t.name); setOpen(false) }}
+                    className="w-full px-3 py-2 text-left hover:bg-white/[0.04] border-b border-[var(--border-subtle)] last:border-0 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <span className="font-mono text-[11px] font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+                        <Wrench size={10} className="text-[#5CA4FF]" />
+                        {t.name}
+                      </span>
+                      <span className="font-mono text-[8px] text-[var(--text-ghost)] uppercase tracking-wider">
+                        {t.category}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[var(--text-ghost)] line-clamp-2 leading-snug">
+                      {t.description}
+                    </p>
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -161,6 +365,8 @@ function AgentConfig({ id, data }: { id: string; data: AgentNodeData }) {
     value: m.value,
     label: `${m.label} · ${m.provider}`,
   }))
+
+  const pricing = MODEL_PRICING[data.model]
 
   return (
     <>
@@ -184,6 +390,21 @@ function AgentConfig({ id, data }: { id: string; data: AgentNodeData }) {
           display={data.maxTokens.toString()}
           color="#5CA4FF"
         />
+
+        {/* Cost estimate badge */}
+        {pricing && (
+          <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-[var(--surface-0)] border border-[var(--border-subtle)]">
+            <DollarSign size={11} className="text-[#00E5C3] flex-shrink-0" />
+            <span className="font-mono text-[10px] text-[var(--text-secondary)]">
+              ${pricing.input.toFixed(2)} in
+              <span className="text-[var(--text-ghost)] mx-1">·</span>
+              ${pricing.output.toFixed(2)} out
+            </span>
+            <span className="font-mono text-[9px] text-[var(--text-ghost)] tracking-wider ml-auto">
+              / 1M TOK
+            </span>
+          </div>
+        )}
       </PanelSection>
 
       <PanelSection title="System Prompt" icon={<Sparkles size={10} />}>
@@ -195,27 +416,11 @@ function AgentConfig({ id, data }: { id: string; data: AgentNodeData }) {
         />
       </PanelSection>
 
-      <PanelSection title="Tools">
-        <div className="flex flex-wrap gap-1.5 min-h-[28px]">
-          {data.tools.length === 0 ? (
-            <span className="text-[11px] text-[var(--text-ghost)] italic">No tools assigned</span>
-          ) : (
-            data.tools.map((t) => (
-              <span
-                key={t}
-                className="font-mono text-[9px] px-2 py-[3px] rounded-md bg-[var(--surface-3)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center gap-1.5 group"
-              >
-                {t}
-                <button
-                  onClick={() => upd({ tools: data.tools.filter((x) => x !== t) })}
-                  className="text-[var(--text-ghost)] hover:text-[#FF6B81] transition-colors"
-                >
-                  ×
-                </button>
-              </span>
-            ))
-          )}
-        </div>
+      <PanelSection title="Tools" icon={<Wrench size={10} />}>
+        <ToolMultiSelect
+          selected={data.tools}
+          onChange={(next) => upd({ tools: next })}
+        />
       </PanelSection>
     </>
   )
@@ -270,15 +475,30 @@ function MemoryConfig({ id, data }: { id: string; data: MemoryNodeData }) {
             value={data.backend}
             onChange={(v) => upd({ backend: v as MemoryNodeData['backend'] })}
             options={[
-              { value: 'qdrant', label: 'Qdrant' },
+              { value: 'qdrant',          label: 'Qdrant' },
               { value: 'postgres_vector', label: 'PostgreSQL pgvector' },
-              { value: 'in_memory', label: 'In-memory (dev)' },
+              { value: 'in_memory',       label: 'In-memory (dev)' },
             ]}
           />
         </div>
         <div>
           <FieldLabel>Collection Name</FieldLabel>
           <TextInput value={data.collectionName} onChange={(v) => upd({ collectionName: v })} placeholder="my_collection" />
+        </div>
+        <div>
+          <FieldLabel>Embedding Model</FieldLabel>
+          <Select
+            value={data.embeddingModel}
+            onChange={(v) => upd({ embeddingModel: v })}
+            options={[
+              { value: 'text-embedding-3-small', label: 'OpenAI · text-embedding-3-small' },
+              { value: 'text-embedding-3-large', label: 'OpenAI · text-embedding-3-large' },
+              { value: 'text-embedding-ada-002', label: 'OpenAI · ada-002 (legacy)' },
+              { value: 'voyage-3',               label: 'Voyage · v3' },
+              { value: 'mistral-embed',          label: 'Mistral · mistral-embed' },
+              { value: 'bge-large-en-v1.5',      label: 'BAAI · bge-large-en-v1.5' },
+            ]}
+          />
         </div>
       </PanelSection>
       <PanelSection title="Retrieval">
@@ -301,39 +521,62 @@ function RouterConfig({ id, data }: { id: string; data: RouterNodeData }) {
     (partial: Partial<RouterNodeData>) => updateNodeData(id, partial),
     [id, updateNodeData]
   )
+
+  const updateRoute = (i: number, change: Partial<{ label: string; target: string }>) => {
+    const routes = [...data.routes]
+    routes[i] = { ...routes[i], ...change }
+    upd({ routes })
+  }
+
   return (
     <PanelSection title="Routing Condition">
       <div>
         <FieldLabel>Condition Expression</FieldLabel>
-        <TextArea value={data.condition} onChange={(v) => upd({ condition: v })} rows={3} placeholder="state['next']" />
+        <TextArea
+          value={data.condition}
+          onChange={(v) => upd({ condition: v })}
+          rows={3}
+          placeholder="state['next']"
+        />
       </div>
       <div>
         <FieldLabel>Routes</FieldLabel>
-        {data.routes.map((r, i) => (
-          <div key={i} className="flex gap-2 mb-1.5">
-            <TextInput
-              value={r.label}
-              onChange={(v) => {
-                const routes = [...data.routes]
-                routes[i] = { ...routes[i], label: v }
-                upd({ routes })
-              }}
-              placeholder="route_label"
-              className="flex-1"
-            />
-            <button
-              onClick={() => upd({ routes: data.routes.filter((_, j) => j !== i) })}
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-[var(--text-ghost)] hover:text-[#FF6B81] hover:bg-[#FF6B81]/8 transition-all border border-transparent hover:border-[#FF6B81]/15"
+        <div className="space-y-2">
+          {data.routes.map((r, i) => (
+            <div
+              key={i}
+              className="p-2 rounded-lg bg-[var(--surface-0)] border border-[var(--border-subtle)] space-y-1.5"
             >
-              <Trash2 size={12} />
-            </button>
-          </div>
-        ))}
+              <div className="flex gap-1.5 items-center">
+                <TextInput
+                  value={r.label}
+                  onChange={(v) => updateRoute(i, { label: v })}
+                  placeholder="route_label"
+                  className="flex-1 h-7 text-[11px]"
+                />
+                <button
+                  onClick={() => upd({ routes: data.routes.filter((_, j) => j !== i) })}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-ghost)] hover:text-[#FF6B81] hover:bg-[#FF6B81]/8 transition-all border border-transparent hover:border-[#FF6B81]/15 flex-shrink-0"
+                  title="Remove route"
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
+              <TextInput
+                value={r.target}
+                onChange={(v) => updateRoute(i, { target: v })}
+                placeholder="target node id"
+                className="h-7 text-[11px] font-mono"
+              />
+            </div>
+          ))}
+        </div>
         <button
           onClick={() => upd({ routes: [...data.routes, { label: 'new_route', target: '' }] })}
-          className="text-[11px] text-[#9B8AFF] hover:text-[#C4B8FF] transition-colors font-mono mt-1 font-medium"
+          className="text-[11px] text-[#FFB547] hover:text-[#FFD08A] transition-colors font-mono mt-2 font-medium flex items-center gap-1"
         >
-          + Add route
+          <Plus size={11} />
+          Add route
         </button>
       </div>
     </PanelSection>
@@ -349,7 +592,12 @@ function HumanGateConfig({ id, data }: { id: string; data: HumanGateNodeData }) 
   return (
     <>
       <PanelSection title="Approval Prompt">
-        <TextArea value={data.prompt} onChange={(v) => upd({ prompt: v })} rows={4} placeholder="Please review the output and approve or reject." />
+        <TextArea
+          value={data.prompt}
+          onChange={(v) => upd({ prompt: v })}
+          rows={4}
+          placeholder="Please review the output and approve or reject."
+        />
       </PanelSection>
       <PanelSection title="Settings">
         <SliderField
@@ -358,6 +606,13 @@ function HumanGateConfig({ id, data }: { id: string; data: HumanGateNodeData }) 
           onChange={(v) => upd({ timeoutSeconds: v })}
           min={30} max={3600} step={30}
           display={`${data.timeoutSeconds}s`}
+          color="#FF6B81"
+        />
+        <ToggleField
+          label="Require explicit approval"
+          hint="If off, gate auto-approves on timeout instead of failing"
+          checked={data.approvalRequired}
+          onChange={(v) => upd({ approvalRequired: v })}
           color="#FF6B81"
         />
       </PanelSection>
