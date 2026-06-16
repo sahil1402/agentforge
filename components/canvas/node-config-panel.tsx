@@ -18,6 +18,7 @@ import { useTools } from '@/lib/use-tools'
 // ─── Model pricing (USD per 1M tokens — approximate; update as needed) ────────
 
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  // Hosted APIs
   'gpt-4o':            { input: 2.5,  output: 10  },
   'gpt-4o-mini':       { input: 0.15, output: 0.6 },
   'claude-3-5-sonnet': { input: 3,    output: 15  },
@@ -26,6 +27,12 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'mistral-7b':        { input: 0.25, output: 0.25},
   'mistral-large':     { input: 2,    output: 6   },
   'llama-3-70b':       { input: 0.6,  output: 0.6 },
+  // HuggingFace Inference API (approximate rates)
+  'llama-3.3-70b':     { input: 0.88, output: 0.88 },
+  'mistral-small-3':   { input: 0.20, output: 0.20 },
+  'qwen-2.5-72b':      { input: 1.20, output: 1.20 },
+  'deepseek-v3':       { input: 0.27, output: 1.10 },
+  'phi-4':             { input: 0.07, output: 0.07 },
 }
 
 // ─── Reusable form components with premium styling ───────────────────────────
@@ -93,6 +100,19 @@ function Select({
   onChange: (v: string) => void
   options: Array<{ value: string; label: string; group?: string }>
 }) {
+  // Build groups in insertion order so we preserve the AVAILABLE_MODELS ordering
+  const groups: Array<{ name: string | null; items: typeof options }> = []
+  for (const o of options) {
+    const name = o.group ?? null
+    const last = groups[groups.length - 1]
+    if (last && last.name === name) {
+      last.items.push(o)
+    } else {
+      groups.push({ name, items: [o] })
+    }
+  }
+  const hasGroups = groups.some((g) => g.name !== null)
+
   return (
     <select
       value={value}
@@ -108,11 +128,23 @@ function Select({
         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234A5068' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`,
       }}
     >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
+      {hasGroups
+        ? groups.map((g, i) =>
+            g.name ? (
+              <optgroup key={`${g.name}-${i}`} label={g.name}>
+                {g.items.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </optgroup>
+            ) : (
+              g.items.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))
+            )
+          )
+        : options.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
     </select>
   )
 }
@@ -330,7 +362,8 @@ function AgentConfig({ id, data }: { id: string; data: AgentNodeData }) {
 
   const modelOptions = AVAILABLE_MODELS.map((m) => ({
     value: m.value,
-    label: `${m.label} · ${m.provider}`,
+    label: m.label,
+    group: m.provider,
   }))
 
   const pricing = MODEL_PRICING[data.model]

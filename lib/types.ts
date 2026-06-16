@@ -211,6 +211,7 @@ export const NODE_DESCRIPTIONS: Record<NodeType, string> = {
 }
 
 export const AVAILABLE_MODELS = [
+  // Hosted APIs
   { value: 'gpt-4o',               label: 'GPT-4o',                provider: 'OpenAI' },
   { value: 'gpt-4o-mini',          label: 'GPT-4o Mini',           provider: 'OpenAI' },
   { value: 'claude-3-5-sonnet',    label: 'Claude 3.5 Sonnet',     provider: 'Anthropic' },
@@ -219,4 +220,10 @@ export const AVAILABLE_MODELS = [
   { value: 'mistral-7b',           label: 'Mistral 7B',            provider: 'Mistral' },
   { value: 'mistral-large',        label: 'Mistral Large',         provider: 'Mistral' },
   { value: 'llama-3-70b',          label: 'Llama 3 70B',           provider: 'Meta' },
+  // Open-source via HuggingFace Inference API
+  { value: 'llama-3.3-70b',        label: 'Llama 3.3 70B Instruct', provider: 'HuggingFace' },
+  { value: 'mistral-small-3',      label: 'Mistral Small 3 (24B)',  provider: 'HuggingFace' },
+  { value: 'qwen-2.5-72b',         label: 'Qwen 2.5 72B Instruct',  provider: 'HuggingFace' },
+  { value: 'deepseek-v3',          label: 'DeepSeek V3',            provider: 'HuggingFace' },
+  { value: 'phi-4',                label: 'Phi-4 (14B)',            provider: 'HuggingFace' },
 ] as const
