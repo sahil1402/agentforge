@@ -151,7 +151,7 @@ export function CodeEditor({
       style={{
         minHeight,
         maxHeight,
-        overflow: 'auto',
+        overflow: 'hidden',
         fontSize: '11.5px',
       }}
     />

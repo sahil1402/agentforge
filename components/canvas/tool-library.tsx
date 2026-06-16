@@ -277,7 +277,10 @@ function ToolEditor({
       )}
 
       {/* Editor body */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className="overflow-y-auto"
+        style={{ maxHeight: 'calc(88vh - 130px)' }}
+      >
         {/* Description */}
         <div className="px-5 py-4 border-b border-[var(--border-subtle)]">
           <p className="font-mono text-[9px] font-semibold tracking-[0.12em] uppercase text-[var(--text-ghost)] mb-2">
@@ -577,7 +580,10 @@ export function ToolLibrary({ open, onOpenChange }: { open: boolean; onOpenChang
                   New Tool
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto">
+              <div
+                className="overflow-y-auto"
+                style={{ maxHeight: 'calc(88vh - 110px)' }}
+              >
                 {loading && tools.length === 0 && (
                   <div className="p-6 text-center">
                     <Loader2 size={16} className="animate-spin text-[var(--text-ghost)] mx-auto mb-2" />
@@ -616,7 +622,7 @@ export function ToolLibrary({ open, onOpenChange }: { open: boolean; onOpenChang
             </aside>
 
             {/* Editor pane */}
-            <main className="flex-1 min-w-0 flex flex-col">
+            <main className="flex-1 min-w-0 min-h-0 flex flex-col">
               {draft ? (
                 <ToolEditor
                   draft={draft}
