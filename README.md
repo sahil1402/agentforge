@@ -122,8 +122,6 @@ AgentForge is built in 5 fully decoupled layers:
 
 ### Real-Time Execution Data Flow
 
-### Real-Time Execution Data Flow
-
 ​```
 User clicks Run
      │
