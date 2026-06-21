@@ -122,33 +122,41 @@ AgentForge is built in 5 fully decoupled layers:
 
 ### Real-Time Execution Data Flow
 
-```
+### Real-Time Execution Data Flow
+
+​```
 User clicks Run
      │
      ▼
-POST /api/runs ──────────────► FastAPI creates Run record (PENDING)
-                                      │
-                                      ▼
-                               Celery worker spawned ◄── Redis broker
-                               Returns run_id immediately
+POST /api/runs
+     │
+     ├──────────────────────► FastAPI creates Run record (PENDING)
+     │                                │
+     │                                ▼
+     │                        Celery worker spawned ◄── Redis broker
+     │                        Returns run_id immediately
      │
      ▼
-Frontend opens WebSocket ──► /ws/runs/{run_id}
-                                      │
-                                      ▼
-                         LangGraph executes graph
-                               │  emits trace events to
-                               ▼
-                         Redis pub/sub
-                         channel: run:{run_id}
-                               │
-                               ▼
-                         WebSocket server subscribes
-                               │  relays to browser
-                               ▼
-                         Canvas animates live
-                         Trace sidebar streams tokens
-```
+Frontend opens WebSocket ───► /ws/runs/{run_id}
+                                       │
+                                       ▼
+                              LangGraph executes graph
+                                       │
+                                       ▼
+                              Emits trace events to
+                              Redis pub/sub channel
+                              run:{run_id}
+                                       │
+                                       ▼
+                              WebSocket server subscribes
+                                       │
+                                       ▼
+                              Relays events to browser
+                                       │
+                                       ▼
+                              Canvas animates live
+                              Trace sidebar streams tokens
+​```
 
 ### The Transpiler — Core IP
 
@@ -371,7 +379,7 @@ agentforge/
 | Week | Focus | Deliverable |
 |---|---|---|
 | **1** ✅ | Canvas foundation | React Flow canvas, 5 node types, PostgreSQL schema, 4 API routes |
-| **2** | Node configuration | Monaco editor, tool registry, model selector with cost estimation |
+| **2** ✅ | Node configuration | Monaco editor, tool registry, model selector with cost estimation |
 | **3** | Graph → code transpiler | JSON DAG → LangGraph Python, 4 topological patterns, graph validator |
 | **4** | Execution engine | FastAPI, Celery workers, sandboxed subprocess, execution state machine |
 | **5** | Real-time streaming | Redis pub/sub, WebSocket server, live canvas animation |
