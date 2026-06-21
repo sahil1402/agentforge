@@ -122,39 +122,29 @@ AgentForge is built in 5 fully decoupled layers:
 
 ### Real-Time Execution Data Flow
 
-​```
-User clicks Run
-     │
-     ▼
-POST /api/runs
-     │
-     ├──────────────────────► FastAPI creates Run record (PENDING)
-     │                                │
-     │                                ▼
-     │                        Celery worker spawned ◄── Redis broker
-     │                        Returns run_id immediately
-     │
-     ▼
-Frontend opens WebSocket ───► /ws/runs/{run_id}
-                                       │
-                                       ▼
-                              LangGraph executes graph
-                                       │
-                                       ▼
-                              Emits trace events to
-                              Redis pub/sub channel
-                              run:{run_id}
-                                       │
-                                       ▼
-                              WebSocket server subscribes
-                                       │
-                                       ▼
-                              Relays events to browser
-                                       │
-                                       ▼
-                              Canvas animates live
-                              Trace sidebar streams tokens
-​```
+```mermaid
+flowchart TD
+    A([User clicks Run]) --> B[POST /api/runs]
+    B --> C[FastAPI creates Run record\nstatus: PENDING]
+    C --> D[Celery worker spawned\nvia Redis broker]
+    D --> E[Returns run_id immediately]
+    E --> F[Frontend opens WebSocket\n/ws/runs/run_id]
+    F --> G[LangGraph executes graph]
+    G --> H[Emits trace events to\nRedis pub/sub\nchannel: run:run_id]
+    H --> I[WebSocket server subscribes\nand relays to browser]
+    I --> J[Canvas animates live\nTrace sidebar streams tokens]
+
+    style A fill:#1B2132,stroke:#9B8AFF,color:#EEF0F6
+    style B fill:#1B2132,stroke:#9B8AFF,color:#EEF0F6
+    style C fill:#1B2132,stroke:#5CA4FF,color:#EEF0F6
+    style D fill:#1B2132,stroke:#5CA4FF,color:#EEF0F6
+    style E fill:#1B2132,stroke:#5CA4FF,color:#EEF0F6
+    style F fill:#1B2132,stroke:#9B8AFF,color:#EEF0F6
+    style G fill:#1B2132,stroke:#00E5C3,color:#EEF0F6
+    style H fill:#1B2132,stroke:#00E5C3,color:#EEF0F6
+    style I fill:#1B2132,stroke:#00E5C3,color:#EEF0F6
+    style J fill:#1B2132,stroke:#00E5C3,color:#EEF0F6
+```
 
 ### The Transpiler — Core IP
 
