@@ -1,0 +1,5 @@
+def {{ name }}(state: AgentState) -> AgentState:
+    """{{ label }}"""
+    llm = {{ provider_cls }}(model="{{ model }}", temperature={{ temperature }}, max_tokens={{ max_tokens }})
+    messages = [SystemMessage(content={{ system_prompt }})] + state["messages"]
+    return {"messages": [llm.invoke(messages)]}
