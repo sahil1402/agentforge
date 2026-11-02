@@ -92,7 +92,7 @@ const defaultNodeData = (type: NodeType, label: string): AnyNodeData => {
       return {
         nodeType: 'tool',
         label,
-        functionName: 'my_tool',
+        functionName: 'web_search',
         description: 'A tool that does something useful.',
         parameterSchema: { query: { type: 'string', description: 'The input query' } },
         returnType: 'string',

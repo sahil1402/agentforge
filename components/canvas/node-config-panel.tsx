@@ -439,12 +439,20 @@ function ToolConfig({ id, data }: { id: string; data: ToolNodeData }) {
     (partial: Partial<ToolNodeData>) => updateNodeData(id, partial),
     [id, updateNodeData]
   )
+  const { tools } = useTools()
+  const toolOptions = [
+    ...(tools.some((t) => t.name === data.functionName)
+      ? []
+      : [{ value: data.functionName, label: `${data.functionName || '—'} (not in registry)` }]),
+    ...tools.map((t) => ({ value: t.name, label: t.name })),
+  ]
   return (
     <>
       <PanelSection title="Function">
         <div>
-          <FieldLabel>Function Name</FieldLabel>
-          <TextInput value={data.functionName} onChange={(v) => upd({ functionName: v })} placeholder="my_tool_function" />
+          <FieldLabel>Registry Tool</FieldLabel>
+          <Select value={data.functionName} onChange={(v) => upd({ functionName: v })} options={toolOptions} />
+          <p className="text-[10px] text-[var(--text-ghost)] mt-1.5">Connect this node to an agent to let that agent call the tool.</p>
         </div>
         <div>
           <FieldLabel>Description</FieldLabel>
