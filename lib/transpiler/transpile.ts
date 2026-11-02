@@ -14,8 +14,9 @@
 import path from 'node:path'
 import nunjucks from 'nunjucks'
 import type { GraphNode, GraphSchema, AgentNodeData, RouterNodeData } from '@/lib/types'
-import { AVAILABLE_MODELS } from '@/lib/types'
+import { AVAILABLE_MODELS, LEGACY_MODEL_ALIASES } from '@/lib/types'
 import { plan, type LinearPlan, type RouterPlan } from './walk'
+import { TranspileError } from './errors'
 
 // ── nunjucks environment ────────────────────────────────────────────────────
 // Loaded from the filesystem relative to the project root. Both `next dev`
@@ -29,27 +30,56 @@ const env = nunjucks.configure(path.join(process.cwd(), 'lib', 'transpiler', 'te
 
 // ── model → LangChain chat class ────────────────────────────────────────────
 interface ProviderImport {
+  /** Name(s) imported from `module` (comma-separated when more than one). */
   cls: string
   module: string
+  /** Python expression constructing the chat model. */
+  llm: (model: string, temperature: string, maxTokens: string) => string
 }
 
 const PROVIDER_IMPORTS: Record<string, ProviderImport> = {
-  OpenAI: { cls: 'ChatOpenAI', module: 'langchain_openai' },
-  Anthropic: { cls: 'ChatAnthropic', module: 'langchain_anthropic' },
-  Mistral: { cls: 'ChatMistralAI', module: 'langchain_mistralai' },
-  Meta: { cls: 'ChatOllama', module: 'langchain_ollama' },
-  HuggingFace: { cls: 'ChatHuggingFaceInference', module: 'langchain_huggingface' },
+  OpenAI: {
+    cls: 'ChatOpenAI',
+    module: 'langchain_openai',
+    llm: (m, t, n) => `ChatOpenAI(model="${m}", temperature=${t}, max_tokens=${n})`,
+  },
+  Anthropic: {
+    cls: 'ChatAnthropic',
+    module: 'langchain_anthropic',
+    llm: (m, t, n) => `ChatAnthropic(model="${m}", temperature=${t}, max_tokens=${n})`,
+  },
+  Mistral: {
+    cls: 'ChatMistralAI',
+    module: 'langchain_mistralai',
+    llm: (m, t, n) => `ChatMistralAI(model="${m}", temperature=${t}, max_tokens=${n})`,
+  },
+  Ollama: {
+    cls: 'ChatOllama',
+    module: 'langchain_ollama',
+    llm: (m, t, n) => `ChatOllama(model="${m}", temperature=${t}, num_predict=${n})`,
+  },
+  HuggingFace: {
+    cls: 'ChatHuggingFace, HuggingFaceEndpoint',
+    module: 'langchain_huggingface',
+    llm: (m, t, n) =>
+      `ChatHuggingFace(llm=HuggingFaceEndpoint(repo_id="${m}", temperature=${t}, max_new_tokens=${n}))`,
+  },
 }
 
-const DEFAULT_PROVIDER = PROVIDER_IMPORTS.OpenAI
-
-const MODEL_PROVIDER = new Map<string, string>(
-  AVAILABLE_MODELS.map((m) => [m.value, m.provider]),
+const MODELS = new Map<string, (typeof AVAILABLE_MODELS)[number]>(
+  AVAILABLE_MODELS.map((m) => [m.value, m]),
 )
 
-function providerFor(model: string): ProviderImport {
-  const provider = MODEL_PROVIDER.get(model)
-  return (provider && PROVIDER_IMPORTS[provider]) || DEFAULT_PROVIDER
+/** Resolve an agent's saved model value to its provider + API model id. */
+function resolveModel(node: GraphNode, value: string): { provider: ProviderImport; apiModel: string } {
+  const model = MODELS.get(LEGACY_MODEL_ALIASES[value] ?? value)
+  if (!model) {
+    throw new TranspileError(
+      'UNSUPPORTED_NODE',
+      `Agent "${node.data?.label ?? node.id}" uses unknown model "${value}". Pick a model in the node config.`,
+    )
+  }
+  return { provider: PROVIDER_IMPORTS[model.provider], apiModel: model.apiModel }
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -84,17 +114,14 @@ function renderAgentBody(
   importSet: Map<string, ProviderImport>,
 ): string {
   const data = node.data as AgentNodeData
-  const provider = providerFor(data.model)
+  const { provider, apiModel } = resolveModel(node, data.model)
   importSet.set(provider.cls, provider)
 
   return env
     .render('agent_node.njk', {
       name,
       label: data.label,
-      provider_cls: provider.cls,
-      model: data.model,
-      temperature: pyNumber(data.temperature),
-      max_tokens: pyNumber(data.maxTokens),
+      llm: provider.llm(apiModel, pyNumber(data.temperature), pyNumber(data.maxTokens)),
       system_prompt: pyTripleQuoted(data.systemPrompt),
     })
     .trimEnd()

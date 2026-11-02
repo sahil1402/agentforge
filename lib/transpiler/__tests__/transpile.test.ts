@@ -64,7 +64,7 @@ describe('transpile — valid linear chains', () => {
     expect(code).toContain('def planner(state: AgentState) -> AgentState:')
     expect(code).toContain('ChatOpenAI(model="gpt-4o", temperature=0.3, max_tokens=1024)')
     expect(code).toContain('def writer(state: AgentState) -> AgentState:')
-    expect(code).toContain('ChatAnthropic(model="claude-3-5-sonnet", temperature=0.7, max_tokens=2048)')
+    expect(code).toContain('ChatAnthropic(model="claude-sonnet-5-5", temperature=0.7, max_tokens=2048)')
 
     // Wiring: START → planner → writer → END, in order.
     expect(code).toContain('builder.add_node("planner", planner)')
@@ -487,6 +487,32 @@ describe('transpile — conditional routing guard clauses', () => {
     const err = captureError(() => transpile(g))
     expect(err.code).toBe('UNSUPPORTED_NODE')
     expect(err.message).toMatch(/at least 2 routes/i)
+  })
+})
+
+// ── model resolution ─────────────────────────────────────────────────────────
+
+describe('transpile — model → provider resolution', () => {
+  test('legacy model values in saved graphs map to their current API id', () => {
+    const { code } = transpile({ nodes: [agentNode('a', { model: 'claude-3-5-sonnet' })], edges: [] })
+    expect(code).toContain('ChatAnthropic(model="claude-sonnet-5-5"')
+  })
+
+  test('HuggingFace models emit ChatHuggingFace over an endpoint with the repo id', () => {
+    const { code } = transpile({ nodes: [agentNode('a', { model: 'qwen-2.5-72b', maxTokens: 512 })], edges: [] })
+    expect(code).toContain('from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint')
+    expect(code).toContain('ChatHuggingFace(llm=HuggingFaceEndpoint(repo_id="Qwen/Qwen2.5-72B-Instruct", temperature=0.7, max_new_tokens=512))')
+  })
+
+  test('Ollama models use num_predict for the token limit', () => {
+    const { code } = transpile({ nodes: [agentNode('a', { model: 'llama3:70b' })], edges: [] })
+    expect(code).toContain('ChatOllama(model="llama3:70b", temperature=0.7, num_predict=1024)')
+  })
+
+  test('unknown model → UNSUPPORTED_NODE instead of a silent fallback', () => {
+    const err = captureError(() => transpile({ nodes: [agentNode('a', { model: 'gpt-9000' })], edges: [] }))
+    expect(err.code).toBe('UNSUPPORTED_NODE')
+    expect(err.message).toMatch(/unknown model "gpt-9000"/)
   })
 })
 

@@ -21,12 +21,9 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   // Hosted APIs
   'gpt-4o':            { input: 2.5,  output: 10  },
   'gpt-4o-mini':       { input: 0.15, output: 0.6 },
-  'claude-3-5-sonnet': { input: 3,    output: 15  },
-  'claude-3-opus':     { input: 15,   output: 75  },
-  'claude-3-haiku':    { input: 0.25, output: 1.25},
-  'mistral-7b':        { input: 0.25, output: 0.25},
-  'mistral-large':     { input: 2,    output: 6   },
-  'llama-3-70b':       { input: 0.6,  output: 0.6 },
+  // shortcut: Claude 5.5 rates not filled in yet, so no cost estimate shows; add them from the Anthropic pricing page.
+  'mistral-large-latest': { input: 2, output: 6 },
+  'llama3:70b':        { input: 0,    output: 0   }, // local via Ollama
   // HuggingFace Inference API (approximate rates)
   'llama-3.3-70b':     { input: 0.88, output: 0.88 },
   'mistral-small-3':   { input: 0.20, output: 0.20 },

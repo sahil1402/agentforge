@@ -210,20 +210,33 @@ export const NODE_DESCRIPTIONS: Record<NodeType, string> = {
   human_gate: 'Human approval checkpoint',
 }
 
+// `value` is what the editor saves; `apiModel` is the id the provider's API expects
+// (emitted into generated code by the transpiler).
 export const AVAILABLE_MODELS = [
   // Hosted APIs
-  { value: 'gpt-4o',               label: 'GPT-4o',                provider: 'OpenAI' },
-  { value: 'gpt-4o-mini',          label: 'GPT-4o Mini',           provider: 'OpenAI' },
-  { value: 'claude-3-5-sonnet',    label: 'Claude 3.5 Sonnet',     provider: 'Anthropic' },
-  { value: 'claude-3-opus',        label: 'Claude 3 Opus',         provider: 'Anthropic' },
-  { value: 'claude-3-haiku',       label: 'Claude 3 Haiku',        provider: 'Anthropic' },
-  { value: 'mistral-7b',           label: 'Mistral 7B',            provider: 'Mistral' },
-  { value: 'mistral-large',        label: 'Mistral Large',         provider: 'Mistral' },
-  { value: 'llama-3-70b',          label: 'Llama 3 70B',           provider: 'Meta' },
+  { value: 'gpt-4o',               label: 'GPT-4o',                provider: 'OpenAI',    apiModel: 'gpt-4o' },
+  { value: 'gpt-4o-mini',          label: 'GPT-4o Mini',           provider: 'OpenAI',    apiModel: 'gpt-4o-mini' },
+  { value: 'claude-opus-5-5',      label: 'Claude Opus 5.5',       provider: 'Anthropic', apiModel: 'claude-opus-5-5' },
+  { value: 'claude-sonnet-5-5',    label: 'Claude Sonnet 5.5',     provider: 'Anthropic', apiModel: 'claude-sonnet-5-5' },
+  { value: 'claude-haiku-5-5',     label: 'Claude Haiku 5.5',      provider: 'Anthropic', apiModel: 'claude-haiku-5-5' },
+  { value: 'mistral-small-latest', label: 'Mistral Small',         provider: 'Mistral',   apiModel: 'mistral-small-latest' },
+  { value: 'mistral-large-latest', label: 'Mistral Large',         provider: 'Mistral',   apiModel: 'mistral-large-latest' },
+  // Local via Ollama
+  { value: 'llama3:70b',           label: 'Llama 3 70B (local)',   provider: 'Ollama',    apiModel: 'llama3:70b' },
   // Open-source via HuggingFace Inference API
-  { value: 'llama-3.3-70b',        label: 'Llama 3.3 70B Instruct', provider: 'HuggingFace' },
-  { value: 'mistral-small-3',      label: 'Mistral Small 3 (24B)',  provider: 'HuggingFace' },
-  { value: 'qwen-2.5-72b',         label: 'Qwen 2.5 72B Instruct',  provider: 'HuggingFace' },
-  { value: 'deepseek-v3',          label: 'DeepSeek V3',            provider: 'HuggingFace' },
-  { value: 'phi-4',                label: 'Phi-4 (14B)',            provider: 'HuggingFace' },
+  { value: 'llama-3.3-70b',        label: 'Llama 3.3 70B Instruct', provider: 'HuggingFace', apiModel: 'meta-llama/Llama-3.3-70B-Instruct' },
+  { value: 'mistral-small-3',      label: 'Mistral Small 3 (24B)',  provider: 'HuggingFace', apiModel: 'mistralai/Mistral-Small-24B-Instruct-2501' },
+  { value: 'qwen-2.5-72b',         label: 'Qwen 2.5 72B Instruct',  provider: 'HuggingFace', apiModel: 'Qwen/Qwen2.5-72B-Instruct' },
+  { value: 'deepseek-v3',          label: 'DeepSeek V3',            provider: 'HuggingFace', apiModel: 'deepseek-ai/DeepSeek-V3' },
+  { value: 'phi-4',                label: 'Phi-4 (14B)',            provider: 'HuggingFace', apiModel: 'microsoft/phi-4' },
 ] as const
+
+/** Retired/renamed model values that may still be in saved graphs → current value. */
+export const LEGACY_MODEL_ALIASES: Record<string, string> = {
+  'claude-3-5-sonnet': 'claude-sonnet-5-5',
+  'claude-3-opus':     'claude-opus-5-5',
+  'claude-3-haiku':    'claude-haiku-5-5',
+  'mistral-7b':        'mistral-small-latest',
+  'mistral-large':     'mistral-large-latest',
+  'llama-3-70b':       'llama3:70b',
+}

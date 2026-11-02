@@ -10,7 +10,7 @@ import {
   applyEdgeChanges,
   addEdge,
 } from '@xyflow/react'
-import type { AnyNodeData, GraphSchema, NodeType, RunStatus } from '@/lib/types'
+import { LEGACY_MODEL_ALIASES, type AnyNodeData, type GraphSchema, type NodeType, type RunStatus } from '@/lib/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -286,7 +286,10 @@ export const useGraphStore = create<GraphState & GraphActions>()(
           id: n.id,
           type: n.type,
           position: n.position,
-          data: n.data,
+          // Upgrade retired model values; persisted on the next save.
+          data: n.data.nodeType === 'agent' && LEGACY_MODEL_ALIASES[n.data.model]
+            ? { ...n.data, model: LEGACY_MODEL_ALIASES[n.data.model] }
+            : n.data,
         })) as AppNode[]
         state.edges = schema.edges.map((e) => ({
           id: e.id,
