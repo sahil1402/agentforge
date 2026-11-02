@@ -20,6 +20,7 @@ const TEMPLATES = [
   { value: 'blank',    label: 'Blank' },
   { value: 'research', label: 'Research Assistant' },
   { value: 'support',  label: 'Customer Support' },
+  { value: 'code_review', label: 'Code Reviewer' },
 ] as const
 
 export default function GraphLibraryPage() {

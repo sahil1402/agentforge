@@ -1,6 +1,7 @@
 import 'dotenv/config'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type Prisma } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
+import { getTemplate } from '../lib/graph-templates'
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 const prisma = new PrismaClient({ adapter })
@@ -186,57 +187,9 @@ for (const tool of starterTools) {
       id: 'research-assistant',
       userId: user.id,
       name: 'Research Assistant',
-      description: 'Planner → Web Search → Synthesizer',
+      description: 'Planner (with web search + URL fetch tools) → Synthesizer',
       version: 1,
-      graphJson: {
-        nodes: [
-          {
-            id: 'planner',
-            type: 'agent',
-            position: { x: 60, y: 160 },
-            data: {
-              nodeType: 'agent',
-              label: 'Planner',
-              model: 'gpt-4o',
-              systemPrompt: 'You are a research planner. Break the query into search sub-tasks.',
-              temperature: 0.3,
-              maxTokens: 1024,
-              tools: [],
-            },
-          },
-          {
-            id: 'search',
-            type: 'tool',
-            position: { x: 340, y: 80 },
-            data: {
-              nodeType: 'tool',
-              label: 'Web Search',
-              functionName: 'tavily_search',
-              description: 'Search the web.',
-              parameterSchema: {},
-              returnType: 'list',
-            },
-          },
-          {
-            id: 'synth',
-            type: 'agent',
-            position: { x: 600, y: 160 },
-            data: {
-              nodeType: 'agent',
-              label: 'Synthesizer',
-              model: 'claude-3-5-sonnet',
-              systemPrompt: 'Synthesize retrieved sources into a research summary.',
-              temperature: 0.7,
-              maxTokens: 2048,
-              tools: [],
-            },
-          },
-        ],
-        edges: [
-          { id: 'e1', source: 'planner', target: 'search' },
-          { id: 'e2', source: 'search', target: 'synth' },
-        ],
-      },
+      graphJson: getTemplate('research') as unknown as Prisma.InputJsonValue,
     },
   })
 
