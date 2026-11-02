@@ -9,27 +9,29 @@ import { TranspileError } from '@/lib/transpiler/errors'
 export const runtime = 'nodejs'
 
 // POST /api/graphs/[id]/transpile
-// Validates the graph is a pure linear agent chain and returns generated
-// LangGraph Python as a string. No execution happens here — that is Week 4.
-// Non-linear / unsupported graphs (router, parallel, human-gate, tool/memory)
-// return 422 with a clear "not yet supported" message pointing at the piece
-// that will add support.
+// Returns generated LangGraph Python as a string. No execution happens here —
+// that is Week 4. Body `{ graphJson }` is optional: when present (the editor's
+// unsaved canvas) it is transpiled instead of the saved graph.
+// Unsupported / malformed graphs return 422 with a clear message.
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
+  const body = (await req.json().catch(() => ({}))) as { graphJson?: GraphSchema }
 
-  let graphJson: GraphSchema
-  try {
-    const graph = await prisma.graph.findUniqueOrThrow({ where: { id } })
+  let graphJson = body.graphJson
+  if (!graphJson) {
+    const graph = await prisma.graph.findUnique({ where: { id } })
+    if (!graph) {
+      return NextResponse.json({ error: 'Graph not found' }, { status: 404 })
+    }
     graphJson = graph.graphJson as unknown as GraphSchema
-  } catch {
-    return NextResponse.json({ error: 'Graph not found' }, { status: 404 })
   }
 
   try {
-    const { code, order } = transpile(graphJson)
+    const tools = await prisma.tool.findMany({ select: { name: true, description: true, code: true } })
+    const { code, order } = transpile(graphJson, { tools })
     return NextResponse.json({ language: 'python', code, order })
   } catch (e) {
     if (e instanceof TranspileError) {
