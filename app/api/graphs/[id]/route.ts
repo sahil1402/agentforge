@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { GraphSchema } from '@/lib/types'
 
@@ -8,12 +9,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  try {
-    const graph = await prisma.graph.findUniqueOrThrow({ where: { id } })
-    return NextResponse.json(graph)
-  } catch {
+  const graph = await prisma.graph.findUnique({ where: { id } })
+  if (!graph) {
     return NextResponse.json({ error: 'Graph not found' }, { status: 404 })
   }
+  return NextResponse.json(graph)
 }
 
 // PATCH /api/graphs/[id]
@@ -29,7 +29,10 @@ export async function PATCH(
   }
 
   try {
-    const current = await prisma.graph.findUniqueOrThrow({ where: { id } })
+    const current = await prisma.graph.findUnique({ where: { id } })
+    if (!current) {
+      return NextResponse.json({ error: 'Graph not found' }, { status: 404 })
+    }
     const newVersion = current.version + 1
 
     const [graph] = await prisma.$transaction([
@@ -39,7 +42,7 @@ export async function PATCH(
         data: {
           ...(body.name        && { name: body.name }),
           ...(body.description && { description: body.description }),
-          ...(body.graphJson   && { graphJson: body.graphJson as any }),
+          ...(body.graphJson   && { graphJson: body.graphJson as unknown as Prisma.InputJsonValue }),
           version: newVersion,
         },
       }),
@@ -48,7 +51,7 @@ export async function PATCH(
         data: {
           graphId: id,
           version: current.version,
-          snapshotJson: current.graphJson as any,
+          snapshotJson: current.graphJson as Prisma.InputJsonValue,
         },
       }),
     ])
@@ -69,7 +72,12 @@ export async function DELETE(
   try {
     await prisma.graph.delete({ where: { id } })
     return NextResponse.json({ success: true })
-  } catch {
-    return NextResponse.json({ error: 'Graph not found' }, { status: 404 })
+  } catch (e) {
+    // P2025 = record to delete does not exist
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+      return NextResponse.json({ error: 'Graph not found' }, { status: 404 })
+    }
+    console.error(e)
+    return NextResponse.json({ error: 'Failed to delete graph' }, { status: 500 })
   }
 }

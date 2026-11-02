@@ -59,7 +59,7 @@ model Run {
   durationMs     Int?       @map("duration_ms")
   tokenCount     Int?       @map("token_count")
   createdAt      DateTime   @default(now()) @map("created_at")
-  graph          Graph      @relation(fields: [graphId], references: [id])
+  graph          Graph      @relation(fields: [graphId], references: [id], onDelete: Cascade)
   events         RunEvent[]
   testCases      TestCase[] @relation("LastRun")
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 // POST /api/runs — dispatch a new graph execution
@@ -9,9 +10,12 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Fetch graph to get current version
-  const graph = await prisma.graph.findUniqueOrThrow({
+  const graph = await prisma.graph.findUnique({
     where: { id: body.graphId },
   })
+  if (!graph) {
+    return NextResponse.json({ error: 'Graph not found' }, { status: 404 })
+  }
 
   // 2. Create Run record immediately — status PENDING
   const run = await prisma.run.create({
@@ -19,14 +23,14 @@ export async function POST(req: NextRequest) {
       graphId: body.graphId,
       graphVersion: graph.version,
       status: 'PENDING',
-      inputPayload: body.input,
+      inputPayload: (body.input ?? {}) as Prisma.InputJsonValue,
     },
   })
 
   // 3. Enqueue Celery task via HTTP to the FastAPI backend
   //    The FastAPI backend proxies the task to Celery
   try {
-    await fetch(`${process.env.BACKEND_URL}/runs/${run.id}/start`, {
+    const res = await fetch(`${process.env.BACKEND_URL}/runs/${run.id}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -35,7 +39,8 @@ export async function POST(req: NextRequest) {
         input:     body.input,
       }),
     })
-  } catch (e) {
+    if (!res.ok) throw new Error(`Backend responded ${res.status}`)
+  } catch {
     // Backend dispatch failed — mark run as failed
     await prisma.run.update({
       where: { id: run.id },

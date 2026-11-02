@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { GraphSchema } from '@/lib/types'
 
@@ -23,10 +24,9 @@ export async function GET(req: NextRequest) {
     },
   })
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const enriched = graphs.map((g: any) => ({
+  const enriched = graphs.map((g) => ({
     ...g,
-    nodeCount: (g.graphJson as any)?.nodes?.length ?? 0,
+    nodeCount: (g.graphJson as unknown as GraphSchema | null)?.nodes?.length ?? 0,
   }))
 
   return NextResponse.json(enriched)
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       userId,
       name: body.name,
       description: body.description,
-      graphJson: templateGraph as any,
+      graphJson: templateGraph as unknown as Prisma.InputJsonValue,
       version: 1,
     },
   })

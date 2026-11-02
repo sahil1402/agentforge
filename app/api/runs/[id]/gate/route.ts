@@ -14,7 +14,10 @@ export async function POST(
   }
 
   // Verify run is in AWAITING_HUMAN state
-  const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } })
+  const run = await prisma.run.findUnique({ where: { id: runId } })
+  if (!run) {
+    return NextResponse.json({ error: 'Run not found' }, { status: 404 })
+  }
 
   if (run.status !== 'AWAITING_HUMAN') {
     return NextResponse.json(
@@ -23,9 +26,23 @@ export async function POST(
     )
   }
 
+  // Forward decision to the FastAPI execution engine first — only record the
+  // resolution once the engine has actually accepted it.
+  // The Celery worker is paused waiting for this signal via Redis
+  try {
+    const res = await fetch(`${process.env.BACKEND_URL}/runs/${runId}/gate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision }),
+    })
+    if (!res.ok) throw new Error(`Backend responded ${res.status}`)
+  } catch {
+    return NextResponse.json({ error: 'Execution engine unavailable' }, { status: 503 })
+  }
+
   // Record the gate resolution event
   const lastEvent = await prisma.runEvent.findFirst({
-    where: { runId, eventType: 'GATE_PENDING' },
+    where: { runId },
     orderBy: { sequence: 'desc' },
   })
 
@@ -38,33 +55,5 @@ export async function POST(
     },
   })
 
-  // Forward decision to the FastAPI execution engine
-  // The Celery worker is paused waiting for this signal via Redis
-  await fetch(`${process.env.BACKEND_URL}/runs/${runId}/gate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ decision }),
-  })
-
   return NextResponse.json({ success: true, decision })
-}
-
-// GET /api/runs/[id] — get run status + events
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: runId } = await params
-
-  const run = await prisma.run.findUniqueOrThrow({
-    where: { id: runId },
-    include: {
-      events: {
-        orderBy: { sequence: 'asc' },
-        take: 200,
-      },
-    },
-  })
-
-  return NextResponse.json(run)
 }
