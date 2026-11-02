@@ -10,7 +10,7 @@ import {
   applyEdgeChanges,
   addEdge,
 } from '@xyflow/react'
-import { LEGACY_MODEL_ALIASES, type AnyNodeData, type GraphSchema, type NodeType, type RunStatus } from '@/lib/types'
+import { LEGACY_MODEL_ALIASES, type AnyNodeData, type GraphSchema, type NodeType, type RouterNodeData, type RunStatus } from '@/lib/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -110,7 +110,7 @@ const defaultNodeData = (type: NodeType, label: string): AnyNodeData => {
       return {
         nodeType: 'router',
         label,
-        condition: 'state["next"]',
+        condition: '"path_a" if "yes" in last.lower() else "path_b"',
         routes: [
           { label: 'path_a', target: '' },
           { label: 'path_b', target: '' },
@@ -125,6 +125,32 @@ const defaultNodeData = (type: NodeType, label: string): AnyNodeData => {
         approvalRequired: true,
       }
   }
+}
+
+// ─── Router edges ────────────────────────────────────────────────────────────
+
+/**
+ * Make a router's outgoing edges match its routes: one edge per route, leaving
+ * from the route's handle (handle id = route label). Routes are the source of
+ * truth, so renaming or retargeting a route never leaves a dangling edge.
+ */
+function syncRouterEdges(state: { nodes: AppNode[]; edges: AppEdge[] }, routerId: string) {
+  const router = state.nodes.find((n) => n.id === routerId)
+  if (!router || router.data.nodeType !== 'router') return
+  const routes = (router.data as RouterNodeData).routes.filter(
+    (r) => r.target && state.nodes.some((n) => n.id === r.target),
+  )
+  const kept = state.edges.filter((e) => e.source !== routerId || !e.sourceHandle)
+  const routed = routes.map((r) =>
+    state.edges.find((e) => e.source === routerId && e.sourceHandle === r.label && e.target === r.target) ?? {
+      id: `${routerId}-${r.label}-${r.target}`,
+      source: routerId,
+      target: r.target,
+      sourceHandle: r.label,
+      type: 'smoothstep',
+    },
+  )
+  state.edges = [...kept, ...routed]
 }
 
 // ─── Counter for unique IDs ───────────────────────────────────────────────────
@@ -165,6 +191,17 @@ export const useGraphStore = create<GraphState & GraphActions>()(
 
     onEdgesChange: (changes) =>
       set((state) => {
+        // Deleting a route's edge clears that route's target (routes and edges stay in sync).
+        for (const c of changes) {
+          if (c.type !== 'remove') continue
+          const edge = state.edges.find((e) => e.id === c.id)
+          const router = edge?.sourceHandle ? state.nodes.find((n) => n.id === edge.source) : undefined
+          if (router?.data.nodeType !== 'router') continue
+          const route = (router.data as RouterNodeData).routes.find(
+            (r) => r.label === edge!.sourceHandle && r.target === edge!.target,
+          )
+          if (route) route.target = ''
+        }
         state.edges = applyEdgeChanges(changes, state.edges)
         // Selection changes are not edits.
         if (changes.some((c) => c.type !== 'select')) state.isDirty = true
@@ -172,10 +209,20 @@ export const useGraphStore = create<GraphState & GraphActions>()(
 
     onConnect: (connection) =>
       set((state) => {
-        state.edges = addEdge(
-          { ...connection, type: 'smoothstep', animated: false },
-          state.edges
-        )
+        // Dragging from a router's route handle (re)targets that route.
+        const source = state.nodes.find((n) => n.id === connection.source)
+        const route = source?.data.nodeType === 'router' && connection.sourceHandle
+          ? (source.data as RouterNodeData).routes.find((r) => r.label === connection.sourceHandle)
+          : undefined
+        if (route) {
+          route.target = connection.target
+          syncRouterEdges(state, source!.id)
+        } else {
+          state.edges = addEdge(
+            { ...connection, type: 'smoothstep', animated: false },
+            state.edges
+          )
+        }
         state.isDirty = true
       }),
 
@@ -200,6 +247,7 @@ export const useGraphStore = create<GraphState & GraphActions>()(
         const node = state.nodes.find((n) => n.id === nodeId)
         if (node) {
           Object.assign(node.data, data)
+          if ('routes' in data) syncRouterEdges(state, nodeId)
           state.isDirty = true
         }
       }),

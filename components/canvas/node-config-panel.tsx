@@ -529,6 +529,15 @@ function RouterConfig({ id, data }: { id: string; data: RouterNodeData }) {
     [id, updateNodeData]
   )
 
+  const nodes = useGraphStore((s) => s.nodes)
+  const targetOptions = nodes
+    .filter((n) => n.id !== id && (n.data.nodeType === 'agent' || n.data.nodeType === 'human_gate'))
+    .map((n) => ({ value: n.id, label: n.data.label }))
+  const optionsFor = (target: string) =>
+    targetOptions.some((o) => o.value === target)
+      ? targetOptions
+      : [{ value: target, label: target ? `${target} (missing node)` : 'Choose a target node…' }, ...targetOptions]
+
   const updateRoute = (i: number, change: Partial<{ label: string; target: string }>) => {
     const routes = [...data.routes]
     routes[i] = { ...routes[i], ...change }
@@ -543,8 +552,12 @@ function RouterConfig({ id, data }: { id: string; data: RouterNodeData }) {
           value={data.condition}
           onChange={(v) => upd({ condition: v })}
           rows={3}
-          placeholder="state['next']"
+          placeholder={'"escalate" if "refund" in last.lower() else "faq"'}
         />
+        <p className="text-[10px] text-[var(--text-ghost)] mt-1.5">
+          Python expression returning a route label. <span className="font-mono">last</span> is the last message&apos;s text; <span className="font-mono">state</span> is the full state.
+          Picking a target draws its edge; dragging from a route&apos;s handle sets its target.
+        </p>
       </div>
       <div>
         <FieldLabel>Routes</FieldLabel>
@@ -569,12 +582,7 @@ function RouterConfig({ id, data }: { id: string; data: RouterNodeData }) {
                   <Trash2 size={11} />
                 </button>
               </div>
-              <TextInput
-                value={r.target}
-                onChange={(v) => updateRoute(i, { target: v })}
-                placeholder="target node id"
-                className="h-7 text-[11px] font-mono"
-              />
+              <Select value={r.target} onChange={(v) => updateRoute(i, { target: v })} options={optionsFor(r.target)} />
             </div>
           ))}
         </div>
