@@ -1,5 +1,14 @@
+{% if tools %}
+async def {{ name }}(state: AgentState) -> AgentState:
+    {{ doc }}
+    tools = [{{ tools }}]
+    llm = {{ llm }}.bind_tools(tools)
+    messages = [SystemMessage(content={{ system_prompt }})] + state["messages"]
+    return {"messages": [await run_with_tools(llm, messages, tools)]}
+{% else %}
 def {{ name }}(state: AgentState) -> AgentState:
-    """{{ label }}"""
+    {{ doc }}
     llm = {{ llm }}
     messages = [SystemMessage(content={{ system_prompt }})] + state["messages"]
     return {"messages": [llm.invoke(messages)]}
+{% endif %}

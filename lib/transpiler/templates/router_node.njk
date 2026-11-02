@@ -1,3 +1,4 @@
 def {{ fn_name }}(state: AgentState) -> str:
-    """Route: {{ label }}"""
+    {{ doc }}
+    last = message_text(state["messages"][-1]) if state["messages"] else ""
     return {{ condition }}
