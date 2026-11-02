@@ -8,11 +8,12 @@ import {
   Brain, Wrench, Database, GitBranch, UserCheck,
   Save, Play, Square, ChevronLeft, Zap,
   TestTube, Rocket, History, Layers, GripVertical,
-  Wrench as ToolsIcon,
+  Wrench as ToolsIcon, Code2,
 } from 'lucide-react'
 import { useGraphStore } from '@/store/graph-store'
 import { NODE_COLORS, type NodeType } from '@/lib/types'
 import { ToolLibrary } from '@/components/canvas/tool-library'
+import { CodePreview } from '@/components/canvas/code-preview'
 
 const Canvas          = dynamic(() => import('@/components/canvas/canvas'),           { ssr: false })
 const NodeConfigPanel = dynamic(() => import('@/components/canvas/node-config-panel'), { ssr: false })
@@ -67,7 +68,7 @@ function PaletteNode({ type, label, Icon, desc }: typeof PALETTE_NODES[0]) {
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────────
 
-function TopToolbar({ graphId, onOpenToolLibrary }: { graphId: string; onOpenToolLibrary: () => void }) {
+function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: string; onOpenToolLibrary: () => void; onOpenCode: () => void }) {
   const router = useRouter()
   const {
     graphName, isDirty, graphVersion, runStatus,
@@ -186,6 +187,9 @@ function TopToolbar({ graphId, onOpenToolLibrary }: { graphId: string; onOpenToo
         <button onClick={onOpenToolLibrary} className="af-icon-btn" title="Tool Library">
           <ToolsIcon size={13} />
         </button>
+        <button onClick={onOpenCode} className="af-icon-btn" title="Show generated code">
+          <Code2 size={13} />
+        </button>
 
         <div className="w-px h-4" style={{ background: 'var(--border-subtle)' }} />
 
@@ -245,6 +249,7 @@ export default function CanvasPage({ params }: { params: Promise<{ id: string }>
   const { id: graphId } = use(params)
   const { loadGraph, activeRunId } = useGraphStore()
   const [toolLibraryOpen, setToolLibraryOpen] = useState(false)
+  const [codeOpen, setCodeOpen] = useState(false)
 
   useEffect(() => {
     if (!graphId) return
@@ -260,7 +265,7 @@ export default function CanvasPage({ params }: { params: Promise<{ id: string }>
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--void)' }}>
-      <TopToolbar graphId={graphId} onOpenToolLibrary={() => setToolLibraryOpen(true)} />
+      <TopToolbar graphId={graphId} onOpenToolLibrary={() => setToolLibraryOpen(true)} onOpenCode={() => setCodeOpen(true)} />
       <div className="flex flex-1 min-h-0">
         <NodePalette />
         <ReactFlowProvider>
@@ -290,6 +295,7 @@ export default function CanvasPage({ params }: { params: Promise<{ id: string }>
         />
       </div>
       <ToolLibrary open={toolLibraryOpen} onOpenChange={setToolLibraryOpen} />
+      <CodePreview graphId={graphId} open={codeOpen} onOpenChange={setCodeOpen} />
     </div>
   )
 }
