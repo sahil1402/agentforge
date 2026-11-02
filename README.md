@@ -10,7 +10,7 @@
 
 <br/>
 
-[![Next.js](https://img.shields.io/badge/Next.js_14-black?style=flat-square&logo=next.js)](https://nextjs.org)
+[![Next.js](https://img.shields.io/badge/Next.js_16-black?style=flat-square&logo=next.js)](https://nextjs.org)
 [![React Flow](https://img.shields.io/badge/React_Flow-FF0072?style=flat-square&logo=react)](https://reactflow.dev)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![LangGraph](https://img.shields.io/badge/LangGraph-1C3A5E?style=flat-square&logo=chainlink&logoColor=white)](https://langchain-ai.github.io/langgraph)
@@ -100,7 +100,7 @@ AgentForge is built in 5 fully decoupled layers:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │  LAYER 1 — FRONTEND                                                  │
-│  Next.js 14 · React Flow · Zustand · Framer Motion · TypeScript     │
+│  Next.js 16 · React Flow · Zustand · Framer Motion · TypeScript     │
 │  Canvas editor · Custom node types · Live trace sidebar             │
 ├─────────────────────────────────────────────────────────────────────┤
 │  LAYER 2 — GRAPH SERIALIZATION + CODE GENERATION                    │
@@ -154,25 +154,33 @@ flowchart TD
 
 ### The Transpiler — Core IP
 
-The transpiler walks the JSON graph in topological order and handles 4 distinct patterns:
+The transpiler (`lib/transpiler/`) validates the JSON graph, walks it in topological order, and emits LangGraph Python. Every node kind is self-contained, so the patterns compose freely:
 
 ```python
-# LINEAR CHAIN  →  straightforward edge
-graph.add_edge("planner", "synthesizer")
+# LINEAR CHAIN  →  plain edges
+builder.add_edge("planner", "synthesizer")
 
-# CONDITIONAL ROUTING  →  router node
-graph.add_conditional_edges("router", route_fn, {"path_a": "agent_a", "path_b": "agent_b"})
+# CONDITIONAL ROUTING  →  routing function + add_conditional_edges (`last` = last message text)
+def route_router(state):
+    last = message_text(state["messages"][-1]) if state["messages"] else ""
+    return "escalate" if "refund" in last.lower() else "faq"
+builder.add_conditional_edges("triage", route_router, {"faq": "faq", "escalate": "gate"})
 
-# PARALLEL FAN-OUT  →  asyncio.gather()
-async def fan_out(state):
-    results = await asyncio.gather(style_check(state), bug_check(state), perf_check(state))
-    return merge(results)
+# PARALLEL FAN-OUT / FAN-IN  →  native LangGraph supersteps; the join waits for every branch
+builder.add_edge("analyzer", "style"); builder.add_edge("analyzer", "bugs"); builder.add_edge("analyzer", "perf")
+builder.add_edge(["style", "bugs", "perf"], "summary")
 
-# HUMAN INTERRUPT GATE  →  LangGraph interrupt()
-def human_gate(state):
-    decision = interrupt({"prompt": state["gate_prompt"], "payload": state["last_output"]})
-    if decision["approved"]: return state
-    raise GraphAbortError("Rejected by human reviewer")
+# HUMAN INTERRUPT GATE  →  interrupt() + checkpointer; rejection ends the run
+def gate(state):
+    decision = interrupt({"prompt": "...", "last_output": last})
+    if not decision.get("approved"):
+        raise GateRejected("Rejected at gate")
+
+# TOOLS  →  tool nodes attach to the agent they connect to; the agent runs its own tool loop
+async def planner(state):
+    tools = [web_search, http_request]
+    llm = ChatOpenAI(model="gpt-4o").bind_tools(tools)
+    return {"messages": [await run_with_tools(llm, messages, tools)]}
 ```
 
 ---
@@ -217,7 +225,7 @@ Graph topology is stored as `JSONB` — fully flexible node/edge schema while ma
 | Layer | Technology | Why chosen | What was rejected |
 |---|---|---|---|
 | Canvas | React Flow | Purpose-built for node graphs — handles drag, connect, zoom, multi-select natively | D3.js — 2000+ lines of custom interaction code |
-| Framework | Next.js 14 | App Router for SSR auth pages, canvas is pure client-side | Vite+React — no SSR |
+| Framework | Next.js 16 | App Router for SSR auth pages, canvas is pure client-side | Vite+React — no SSR |
 | State | Zustand + Immer | Deeply nested graph state mutated on every drag. Immer handles immutability | Redux — too verbose for high-frequency mutations |
 | Animation | Framer Motion | Declarative animation for node pulse, edge glow, token stream | CSS animations — insufficient for data-driven states |
 | Backend | FastAPI | Async-native, handles REST + WebSocket in one process, Pydantic validation | Django — sync-first, WebSocket requires Channels |
@@ -275,14 +283,13 @@ BACKEND_URL="http://localhost:8000"
 ### 4. Run migrations and seed
 
 ```bash
-npx prisma migrate dev --name init
+npx prisma migrate dev
 npx prisma db seed
 ```
 
-This creates all 6 tables and seeds 3 example graphs:
-- **Research Assistant** — Planner → Web Search + URL Fetcher → Synthesizer
-- **Customer Support** — Router → FAQ Agent + Escalation HumanGate
-- **Code Reviewer** — Analyzer → parallel Style + Bug + Performance checker fan-out
+This creates the tables and seeds a dev user, 4 starter tools, and the
+**Research Assistant** graph (Planner → Web Search → Synthesizer). The **Customer
+Support** graph is available as a template from the "New graph" menu on the home page.
 
 ### 5. Start the dev server
 
@@ -290,7 +297,7 @@ This creates all 6 tables and seeds 3 example graphs:
 npm run dev
 ```
 
-Open [http://localhost:3000/canvas/research-assistant](http://localhost:3000/canvas/research-assistant)
+Open [http://localhost:3100](http://localhost:3100) for the graph library, or jump straight to [http://localhost:3100/canvas/research-assistant](http://localhost:3100/canvas/research-assistant)
 
 ---
 
@@ -300,7 +307,7 @@ Open [http://localhost:3000/canvas/research-assistant](http://localhost:3000/can
 ```
 Planner (gpt-4o)
     ├──► Web Search (tavily_search)  ──►
-    ├──► URL Fetcher (requests)       ──► Synthesizer (claude-3-5-sonnet)
+    ├──► URL Fetcher (requests)       ──► Synthesizer (claude-sonnet-5-5)
     └──► Vector Store (qdrant)       ──►
 ```
 Parallel retrieval fan-out with semantic memory augmentation.
@@ -316,7 +323,7 @@ Conditional routing with human-in-the-loop gate.
 ```
 Code Analyzer (gpt-4o)
     ├──► Style Checker (gpt-4o-mini)  ──►
-    ├──► Bug Checker (gpt-4o)          ──► Review Summarizer (claude-3-5-sonnet)
+    ├──► Bug Checker (gpt-4o)          ──► Review Summarizer (claude-sonnet-5-5)
     └──► Perf Checker (gpt-4o-mini)   ──►
 ```
 Three parallel specialist agents merged into a single structured review.
@@ -330,15 +337,18 @@ agentforge/
 ├── app/
 │   ├── canvas/[id]/
 │   │   └── page.tsx              # Canvas editor — main IDE screen
-│   ├── dashboard/
-│   │   └── page.tsx              # Graph library dashboard
+│   ├── page.tsx                  # Graph library (home)
 │   ├── api/
 │   │   ├── graphs/
 │   │   │   ├── route.ts          # GET (list), POST (create)
-│   │   │   └── [id]/route.ts     # GET, PATCH, DELETE
+│   │   │   └── [id]/
+│   │   │       ├── route.ts      # GET, PATCH, DELETE
+│   │   │       └── transpile/route.ts # POST → generated LangGraph Python
+│   │   ├── tools/                # Tool registry CRUD
 │   │   └── runs/
-│   │       ├── route.ts          # POST (dispatch run)
+│   │       ├── route.ts          # POST (dispatch run), GET (list)
 │   │       └── [id]/
+│   │           ├── route.ts      # GET (run status + events)
 │   │           └── gate/route.ts # POST (human gate decision)
 │   ├── layout.tsx
 │   └── globals.css
@@ -357,11 +367,12 @@ agentforge/
 ├── lib/
 │   ├── types.ts                  # All TypeScript types + node color/label maps
 │   ├── prisma.ts                 # Prisma client singleton
+│   ├── transpiler/               # Graph → LangGraph Python (walk, render, nunjucks templates)
 │   └── utils.ts                  # cn() utility
 │
 ├── prisma/
 │   ├── schema.prisma             # 6-table PostgreSQL schema
-│   └── seed.ts                   # 3 example graphs
+│   └── seed.ts                   # dev user, starter tools, example graph
 │
 └── .env.local                    # Environment config
 ```
@@ -374,7 +385,7 @@ agentforge/
 |---|---|---|
 | **1** ✅ | Canvas foundation | React Flow canvas, 5 node types, PostgreSQL schema, 4 API routes |
 | **2** ✅ | Node configuration | Monaco editor, tool registry, model selector with cost estimation |
-| **3** | Graph → code transpiler | JSON DAG → LangGraph Python, 4 topological patterns, graph validator |
+| **3** ✅ | Graph → code transpiler | JSON DAG → LangGraph Python, 4 topological patterns, graph validator |
 | **4** | Execution engine | FastAPI, Celery workers, sandboxed subprocess, execution state machine |
 | **5** | Real-time streaming | Redis pub/sub, WebSocket server, live canvas animation |
 | **6** | Test harness | Test case UI, path assertion, regression runner, GitHub Actions CI hook |
@@ -389,7 +400,7 @@ agentforge/
 - [x] Visual canvas with 5 node types
 - [x] Node configuration panels
 - [x] PostgreSQL persistence with Prisma
-- [ ] Jinja2 graph → LangGraph transpiler
+- [x] Jinja2 graph → LangGraph transpiler
 - [ ] FastAPI + Celery execution engine
 - [ ] Live WebSocket execution trace
 
