@@ -7,7 +7,7 @@ import type { TraceEvent } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { NODE_COLORS } from '@/lib/types'
 import {
-  CheckCircle2, XCircle, Loader2, Clock, Terminal,
+  Loader2, Clock, Terminal,
   FileText, Activity, ChevronDown, ChevronRight,
   Sparkles, Timer,
 } from 'lucide-react'
@@ -30,14 +30,13 @@ interface TracePanelProps {
 }
 
 export default function TracePanel({ runId, onGateApprove, onGateReject }: TracePanelProps) {
-  const { nodes, runStatus } = useGraphStore()
+  const { runStatus } = useGraphStore()
   const [nodeTraces, setNodeTraces] = useState<Map<string, NodeTrace>>(new Map())
   const [totalTokens, setTotalTokens] = useState(0)
   const [elapsedMs, setElapsedMs] = useState(0)
   const [activeTab, setActiveTab] = useState<'trace' | 'output' | 'logs'>('trace')
   const [finalOutput, setFinalOutput] = useState<string | null>(null)
   const [gatePending, setGatePending] = useState(false)
-  const [gateNodeId, setGateNodeId] = useState<string | null>(null)
 
   const startTimeRef = useRef<number | null>(null)
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -57,72 +56,72 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
 
   useEffect(() => {
     if (!runId) return
-    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/ws/runs/${runId}`)
 
-    ws.onmessage = (msg) => {
-      const event: TraceEvent = JSON.parse(msg.data)
-      handleTraceEvent(event)
+    const handleTraceEvent = (event: TraceEvent) => {
+      // Mirror node/run state into the store so the canvas nodes + edges animate.
+      const store = useGraphStore.getState()
+      if (event.nodeId) {
+        if (event.type === 'NODE_START') store.setNodeActive(event.nodeId)
+        if (event.type === 'NODE_END') store.setNodeComplete(event.nodeId)
+        if (event.type === 'ERROR') store.setNodeFailed(event.nodeId)
+      }
+      if (event.type === 'GATE_PENDING') store.setRunState(runId, 'AWAITING_HUMAN')
+      if (event.type === 'GATE_RESOLVED') store.setRunState(runId, 'RUNNING')
+      if (event.type === 'COMPLETE') store.setRunState(runId, 'COMPLETE')
+      if (event.type === 'ERROR') store.setRunState(runId, 'FAILED')
+
+      // Updater must stay pure (StrictMode runs it twice) — replace entries, never mutate.
+      setNodeTraces((prev) => {
+        const next = new Map(prev)
+        const existing = event.nodeId ? next.get(event.nodeId) : undefined
+
+        if (event.type === 'NODE_START' && event.nodeId) {
+          const graphNode = store.nodes.find((n) => n.id === event.nodeId)
+          next.set(event.nodeId, {
+            nodeId: event.nodeId,
+            nodeLabel: graphNode?.data.label ?? event.nodeId,
+            nodeType: graphNode?.data.nodeType ?? 'agent',
+            status: 'running',
+            tokens: [],
+            tokenCount: 0,
+            startedAt: Date.now(),
+          })
+        }
+
+        if (event.type === 'TOKEN_CHUNK' && existing) {
+          next.set(existing.nodeId, {
+            ...existing,
+            tokens: [...existing.tokens, String(event.payload.chunk ?? '')],
+            tokenCount: existing.tokenCount + 1,
+          })
+        }
+
+        if (event.type === 'NODE_END' && existing) {
+          next.set(existing.nodeId, {
+            ...existing,
+            status: 'done',
+            durationMs: existing.startedAt ? Date.now() - existing.startedAt : undefined,
+          })
+        }
+
+        if (event.type === 'ERROR' && existing) {
+          next.set(existing.nodeId, { ...existing, status: 'failed' })
+        }
+
+        return next
+      })
+
+      if (event.type === 'GATE_PENDING') setGatePending(true)
+      if (event.type === 'GATE_RESOLVED') setGatePending(false)
+      if (event.type === 'COMPLETE') setFinalOutput(String(event.payload.output ?? ''))
+      if (event.type === 'TOKEN_CHUNK') setTotalTokens((t) => t + 1)
     }
 
+    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/ws/runs/${runId}`)
+    ws.onmessage = (msg) => handleTraceEvent(JSON.parse(msg.data) as TraceEvent)
     ws.onerror = console.error
     return () => ws.close()
   }, [runId])
-
-  const handleTraceEvent = (event: TraceEvent) => {
-    setNodeTraces((prev) => {
-      const next = new Map(prev)
-
-      if (event.type === 'NODE_START' && event.nodeId) {
-        const graphNode = nodes.find((n) => n.id === event.nodeId)
-        next.set(event.nodeId, {
-          nodeId: event.nodeId,
-          nodeLabel: graphNode?.data.label ?? event.nodeId,
-          nodeType: graphNode?.data.nodeType ?? 'agent',
-          status: 'running',
-          tokens: [],
-          tokenCount: 0,
-          startedAt: Date.now(),
-        })
-      }
-
-      if (event.type === 'TOKEN_CHUNK' && event.nodeId) {
-        const existing = next.get(event.nodeId)
-        if (existing) {
-          existing.tokens = [...existing.tokens, String(event.payload.chunk ?? '')]
-          existing.tokenCount += 1
-        }
-      }
-
-      if (event.type === 'NODE_END' && event.nodeId) {
-        const existing = next.get(event.nodeId)
-        if (existing) {
-          existing.status = 'done'
-          existing.durationMs = existing.startedAt ? Date.now() - existing.startedAt : undefined
-        }
-      }
-
-      if (event.type === 'ERROR' && event.nodeId) {
-        const existing = next.get(event.nodeId)
-        if (existing) existing.status = 'failed'
-      }
-
-      return next
-    })
-
-    if (event.type === 'GATE_PENDING') {
-      setGatePending(true)
-      setGateNodeId(event.nodeId ?? null)
-    }
-    if (event.type === 'GATE_RESOLVED') {
-      setGatePending(false)
-      setGateNodeId(null)
-    }
-    if (event.type === 'COMPLETE') {
-      setFinalOutput(String(event.payload.output ?? ''))
-    }
-
-    setTotalTokens((t) => t + (event.type === 'TOKEN_CHUNK' ? 1 : 0))
-  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

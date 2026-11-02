@@ -135,7 +135,7 @@ const newNodeId = () => `node_${Date.now()}_${++nodeCounter}`
 // ─── Store ───────────────────────────────────────────────────────────────────
 
 export const useGraphStore = create<GraphState & GraphActions>()(
-  immer((set, get) => ({
+  immer((set) => ({
     // Initial state
     graphId: null,
     graphName: 'Untitled Graph',
@@ -155,9 +155,10 @@ export const useGraphStore = create<GraphState & GraphActions>()(
     onNodesChange: (changes) =>
       set((state) => {
         state.nodes = applyNodeChanges(changes, state.nodes) as AppNode[]
-        // Mark dirty on move/resize but not selection changes
+        // Mark dirty on move/resize/remove — not on selection, and not on React Flow's
+        // initial node measurement (a 'dimensions' change without `resizing`).
         const hasMutation = changes.some(
-          (c) => c.type === 'position' || c.type === 'dimensions' || c.type === 'remove'
+          (c) => c.type === 'position' || (c.type === 'dimensions' && c.resizing) || c.type === 'remove'
         )
         if (hasMutation) state.isDirty = true
       }),
@@ -165,7 +166,8 @@ export const useGraphStore = create<GraphState & GraphActions>()(
     onEdgesChange: (changes) =>
       set((state) => {
         state.edges = applyEdgeChanges(changes, state.edges)
-        state.isDirty = true
+        // Selection changes are not edits.
+        if (changes.some((c) => c.type !== 'select')) state.isDirty = true
       }),
 
     onConnect: (connection) =>

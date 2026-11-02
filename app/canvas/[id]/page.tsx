@@ -80,14 +80,30 @@ function TopToolbar({ graphId, onOpenToolLibrary }: { graphId: string; onOpenToo
     setSaving(true)
     try {
       const { nodes, edges } = useGraphStore.getState()
-      await fetch(`/api/graphs/${graphId}`, {
+      const res = await fetch(`/api/graphs/${graphId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ graphJson: { nodes, edges }, name: graphName }),
       })
+      if (!res.ok) throw new Error(`Save failed (HTTP ${res.status})`)
+      const saved = await res.json()
+      useGraphStore.getState().setGraphVersion(saved.version)
       useGraphStore.getState().markSaved()
+    } catch (e) {
+      console.error(e) // graph stays dirty so the user can retry
     } finally { setSaving(false) }
   }, [graphId, graphName])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        if (useGraphStore.getState().isDirty) handleSave()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [handleSave])
 
   const handleRun = useCallback(async () => {
     try {
@@ -97,6 +113,7 @@ function TopToolbar({ graphId, onOpenToolLibrary }: { graphId: string; onOpenToo
         body: JSON.stringify({ graphId, input: { query: 'test input' } }),
       })
       const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
       useGraphStore.getState().setRunState(data.runId, 'RUNNING')
     } catch (e) { console.error('Run failed', e) }
   }, [graphId])
@@ -110,7 +127,7 @@ function TopToolbar({ graphId, onOpenToolLibrary }: { graphId: string; onOpenToo
     >
       {/* Logo */}
       <button
-        onClick={() => router.push('/dashboard')}
+        onClick={() => router.push('/')}
         className="flex items-center gap-2 mr-1 group"
         style={{ color: 'var(--text-muted)' }}
       >
@@ -125,7 +142,7 @@ function TopToolbar({ graphId, onOpenToolLibrary }: { graphId: string; onOpenToo
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>
-        <span style={{ color: 'var(--text-ghost)', cursor: 'pointer' }} onClick={() => router.push('/dashboard')}>graphs</span>
+        <span style={{ color: 'var(--text-ghost)', cursor: 'pointer' }} onClick={() => router.push('/')}>graphs</span>
         <span style={{ color: 'var(--text-ghost)', opacity: 0.4, fontSize: '8px' }}>→</span>
         <input
           value={graphName}
@@ -240,14 +257,6 @@ export default function CanvasPage({ params }: { params: Promise<{ id: string }>
       })
       .catch(console.error)
   }, [graphId, loadGraph])
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') e.preventDefault()
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--void)' }}>

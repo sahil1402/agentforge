@@ -6,7 +6,7 @@ import {
   type ReactFlowInstance, type OnConnectStartParams, SelectionMode,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useGraphStore } from '@/store/graph-store'
+import { useGraphStore, type AppNode, type AppEdge } from '@/store/graph-store'
 import { nodeTypes } from './nodes'
 import { edgeTypes } from './edges'
 import type { NodeType } from '@/lib/types'
@@ -19,11 +19,10 @@ export default function Canvas() {
     addNode, setSelectedNode,
   } = useGraphStore()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rfInstance = useRef<any>(null)
+  const rfInstance = useRef<ReactFlowInstance<AppNode, AppEdge> | null>(null)
   const connectingNodeId = useRef<string | null>(null)
 
-  const onInit = useCallback((instance: ReactFlowInstance<any, any>) => {
+  const onInit = useCallback((instance: ReactFlowInstance<AppNode, AppEdge>) => {
     rfInstance.current = instance
   }, [])
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   X, Plus, Wrench, Trash2, Save, Copy, Shield, AlertCircle, Loader2, FileCode, Brackets,
@@ -151,14 +151,6 @@ function ToolEditor({
   const [returnSchemaText, setReturnSchemaText] = useState(() => jsonStringify(draft.returnSchema))
   const [paramErr, setParamErr] = useState<string | null>(null)
   const [returnErr, setReturnErr] = useState<string | null>(null)
-
-  // Re-sync when draft identity changes (different tool selected)
-  useEffect(() => {
-    setParamSchemaText(jsonStringify(draft.paramSchema))
-    setReturnSchemaText(jsonStringify(draft.returnSchema))
-    setParamErr(null)
-    setReturnErr(null)
-  }, [draft.id])
 
   const handleParamSchemaChange = (txt: string) => {
     setParamSchemaText(txt)
@@ -371,14 +363,14 @@ export function ToolLibrary({ open, onOpenChange }: { open: boolean; onOpenChang
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Bumped on Cancel so the editor remounts and drops its local JSON text.
+  const [resetCount, setResetCount] = useState(0)
+
   // When tools load and nothing selected, pick the first one
-  useEffect(() => {
-    if (!open) return
-    if (tools.length > 0 && !selectedId && !draft) {
-      setSelectedId(tools[0].id)
-      setDraft(tools[0])
-    }
-  }, [tools, open, selectedId, draft])
+  if (open && tools.length > 0 && !selectedId && !draft) {
+    setSelectedId(tools[0].id)
+    setDraft(tools[0])
+  }
 
   // Group tools by category
   const { builtin, custom } = useMemo(() => {
@@ -444,6 +436,7 @@ export function ToolLibrary({ open, onOpenChange }: { open: boolean; onOpenChang
   const handleCancel = () => {
     if (!original) return
     setDraft(original)
+    setResetCount((n) => n + 1)
     setError(null)
   }
 
@@ -625,6 +618,8 @@ export function ToolLibrary({ open, onOpenChange }: { open: boolean; onOpenChang
             <main className="flex-1 min-w-0 min-h-0 flex flex-col">
               {draft ? (
                 <ToolEditor
+                  // Remount (resetting local JSON text) when a different tool is selected or on Cancel
+                  key={`${draft.id ?? 'new'}:${resetCount}`}
                   draft={draft}
                   onChange={updateDraft}
                   onSave={handleSave}

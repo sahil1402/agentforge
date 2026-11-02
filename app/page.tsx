@@ -1,287 +1,124 @@
 'use client'
 
-import dynamic from 'next/dynamic'
-import { useCallback, useState, useEffect, use } from 'react'
-import { ReactFlowProvider } from '@xyflow/react'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  Brain, Wrench, Database, GitBranch, UserCheck,
-  Save, Play, Square, ChevronLeft, Zap,
-  TestTube, Rocket, History, Layers, GripVertical,
-  Wrench as ToolsIcon,
-} from 'lucide-react'
-import { useGraphStore } from '@/store/graph-store'
-import { NODE_COLORS, type NodeType } from '@/lib/types'
-import { ToolLibrary } from '@/components/canvas/tool-library'
+import { Plus, Zap } from 'lucide-react'
 
-const Canvas          = dynamic(() => import('@/components/canvas/canvas'),           { ssr: false })
-const NodeConfigPanel = dynamic(() => import('@/components/canvas/node-config-panel'), { ssr: false })
-const TracePanel      = dynamic(() => import('@/components/canvas/trace-panel'),       { ssr: false })
+// ─── Graph library (home) ────────────────────────────────────────────────────
 
-// ─── Palette ─────────────────────────────────────────────────────────────────
+interface GraphListItem {
+  id: string
+  name: string
+  description: string | null
+  version: number
+  nodeCount: number
+  updatedAt: string
+}
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const PALETTE_NODES: Array<{ type: NodeType; label: string; Icon: React.FC<any>; desc: string }> = [
-  { type: 'agent',      Icon: Brain,      label: 'Agent',  desc: 'LLM with tools' },
-  { type: 'tool',       Icon: Wrench,     label: 'Tool',   desc: 'Python function' },
-  { type: 'memory',     Icon: Database,   label: 'Memory', desc: 'Vector store' },
-  { type: 'router',     Icon: GitBranch,  label: 'Router', desc: 'Conditional edge' },
-  { type: 'human_gate', Icon: UserCheck,  label: 'Gate',   desc: 'Approval point' },
-]
+const TEMPLATES = [
+  { value: 'blank',    label: 'Blank' },
+  { value: 'research', label: 'Research Assistant' },
+  { value: 'support',  label: 'Customer Support' },
+] as const
 
-function PaletteNode({ type, label, Icon, desc }: typeof PALETTE_NODES[0]) {
-  const colors = NODE_COLORS[type]
+export default function GraphLibraryPage() {
+  const router = useRouter()
+  const [graphs, setGraphs] = useState<GraphListItem[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [template, setTemplate] = useState<(typeof TEMPLATES)[number]['value']>('blank')
+  const [creating, setCreating] = useState(false)
 
-  const onDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData('application/agentforge-node', type)
-    e.dataTransfer.effectAllowed = 'move'
+  useEffect(() => {
+    fetch('/api/graphs')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then(setGraphs)
+      .catch(() => setError('Could not load graphs. Is the database running?'))
+  }, [])
+
+  const handleCreate = async () => {
+    setCreating(true)
+    try {
+      const name = TEMPLATES.find((t) => t.value === template)!.label
+      const res = await fetch('/api/graphs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: template === 'blank' ? 'Untitled Graph' : name, template }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const graph = await res.json()
+      router.push(`/canvas/${graph.id}`)
+    } catch {
+      setError('Could not create graph.')
+      setCreating(false)
+    }
   }
 
   return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      className="af-palette-node group relative flex items-center gap-2.5 px-2.5 py-2 rounded-[10px] cursor-grab"
-      style={{
-        background: colors.bg,
-        border: `1px solid ${colors.border}`,
-      }}
-      title={`Drag to add ${label}`}
-    >
-      <div
-        className="w-[30px] h-[30px] rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{
-          background: `${colors.primary}14`,
-          boxShadow: `inset 0 0 0 1px ${colors.primary}20`,
-        }}
+    <div className="min-h-screen" style={{ background: 'var(--void)' }}>
+      <header
+        className="h-11 flex items-center px-4 gap-2"
+        style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--border-subtle)' }}
       >
-        <Icon size={14} style={{ color: colors.primary }} strokeWidth={2} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold leading-none mb-[2px]" style={{ color: 'var(--text-primary)', fontFamily: 'Syne, sans-serif' }}>{label}</p>
-        <p className="text-[8.5px] leading-none" style={{ color: 'var(--text-ghost)', fontFamily: 'JetBrains Mono, monospace' }}>{desc}</p>
-      </div>
-    </div>
-  )
-}
-
-// ─── Toolbar ─────────────────────────────────────────────────────────────────
-
-function TopToolbar({ graphId, onOpenToolLibrary }: { graphId: string; onOpenToolLibrary: () => void }) {
-  const router = useRouter()
-  const {
-    graphName, isDirty, graphVersion, runStatus,
-    setGraphName, clearRunState,
-  } = useGraphStore()
-
-  const [saving, setSaving] = useState(false)
-
-  const handleSave = useCallback(async () => {
-    setSaving(true)
-    try {
-      const { nodes, edges } = useGraphStore.getState()
-      await fetch(`/api/graphs/${graphId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ graphJson: { nodes, edges }, name: graphName }),
-      })
-      useGraphStore.getState().markSaved()
-    } finally { setSaving(false) }
-  }, [graphId, graphName])
-
-  const handleRun = useCallback(async () => {
-    try {
-      const res = await fetch('/api/runs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ graphId, input: { query: 'test input' } }),
-      })
-      const data = await res.json()
-      useGraphStore.getState().setRunState(data.runId, 'RUNNING')
-    } catch (e) { console.error('Run failed', e) }
-  }, [graphId])
-
-  const isRunning = runStatus === 'RUNNING' || runStatus === 'AWAITING_HUMAN'
-
-  return (
-    <header
-      className="h-11 flex items-center px-3 gap-2 flex-shrink-0 relative z-50"
-      style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--border-subtle)' }}
-    >
-      {/* Logo */}
-      <button
-        onClick={() => router.push('/dashboard')}
-        className="flex items-center gap-2 mr-1 group"
-        style={{ color: 'var(--text-muted)' }}
-      >
-        <ChevronLeft size={13} className="group-hover:-translate-x-0.5 transition-transform" />
         <div
           className="w-6 h-6 rounded-md flex items-center justify-center"
           style={{ background: 'linear-gradient(135deg, #9B8AFF, #5CA4FF)' }}
         >
           <Zap size={12} className="text-white" strokeWidth={2.5} />
         </div>
-      </button>
-
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>
-        <span style={{ color: 'var(--text-ghost)', cursor: 'pointer' }} onClick={() => router.push('/dashboard')}>graphs</span>
-        <span style={{ color: 'var(--text-ghost)', opacity: 0.4, fontSize: '8px' }}>→</span>
-        <input
-          value={graphName}
-          onChange={(e) => setGraphName(e.target.value)}
-          className="bg-transparent outline-none border-b border-transparent focus:border-white/15 transition-colors min-w-[100px]"
-          style={{ color: 'var(--text-primary)', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: '12px' }}
-        />
-        <span
-          className="rounded-md px-1.5 py-[1px]"
-          style={{ background: 'var(--surface-3)', border: '1px solid var(--border-subtle)', fontSize: '8px', fontWeight: 600, color: 'var(--text-muted)' }}
-        >
-          v{graphVersion}
+        <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
+          AgentForge
         </span>
-        {isDirty && (
-          <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent-amber)', boxShadow: '0 0 6px rgba(255,181,71,0.4)' }} />
-        )}
-      </div>
 
-      {/* Right actions */}
-      <div className="ml-auto flex items-center gap-1.5">
-        <button
-          onClick={handleSave}
-          disabled={!isDirty || saving}
-          className="af-btn af-btn-save"
-        >
-          <Save size={11} />
-          {saving ? 'Saving…' : 'Save'}
-          {isDirty && (
-            <span style={{ fontFamily: 'JetBrains Mono', fontSize: '7px', background: 'rgba(255,255,255,0.05)', padding: '1px 3px', borderRadius: '3px', color: 'var(--text-ghost)' }}>⌘S</span>
-          )}
-        </button>
-
-        <div className="w-px h-4" style={{ background: 'var(--border-subtle)' }} />
-
-        <button className="af-icon-btn" title="History">
-          <History size={13} />
-        </button>
-        <button className="af-icon-btn" title="Tests">
-          <TestTube size={13} />
-        </button>
-        <button onClick={onOpenToolLibrary} className="af-icon-btn" title="Tool Library">
-          <ToolsIcon size={13} />
-        </button>
-
-        <div className="w-px h-4" style={{ background: 'var(--border-subtle)' }} />
-
-        <button className="af-btn af-btn-deploy">
-          <Rocket size={11} />
-          Deploy
-        </button>
-
-        {isRunning ? (
-          <button onClick={() => clearRunState()} className="af-btn af-btn-stop">
-            <Square size={9} className="fill-current" />
-            Stop
+        <div className="ml-auto flex items-center gap-1.5">
+          <select
+            aria-label="Template"
+            value={template}
+            onChange={(e) => setTemplate(e.target.value as typeof template)}
+            className="h-7 px-2 rounded-md text-[11px] outline-none"
+            style={{ background: 'var(--surface-3)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
+          >
+            {TEMPLATES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <button onClick={handleCreate} disabled={creating} className="af-btn af-btn-run">
+            <Plus size={11} />
+            {creating ? 'Creating…' : 'New graph'}
           </button>
-        ) : (
-          <button onClick={handleRun} className="af-btn af-btn-run">
-            <Play size={9} className="fill-current" />
-            Run
-          </button>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-8">
+        <h1 className="mb-5" style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: '18px', color: 'var(--text-primary)' }}>
+          Graphs
+        </h1>
+
+        {error && <p className="text-[12px] mb-4" style={{ color: 'var(--accent-rose)' }}>{error}</p>}
+        {!graphs && !error && <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Loading…</p>}
+        {graphs?.length === 0 && (
+          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No graphs yet — create one to get started.</p>
         )}
-      </div>
-    </header>
-  )
-}
 
-// ─── Palette Sidebar ─────────────────────────────────────────────────────────
-
-function NodePalette() {
-  return (
-    <aside
-      className="w-[170px] flex-shrink-0 flex flex-col overflow-hidden"
-      style={{ background: 'rgba(12,16,25,0.6)', borderRight: '1px solid var(--border-subtle)' }}
-    >
-      <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-        <div className="flex items-center gap-1.5">
-          <Layers size={10} style={{ color: 'var(--text-ghost)' }} />
-          <p style={{ fontFamily: 'JetBrains Mono', fontSize: '8px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase' as const, color: 'var(--text-ghost)' }}>
-            Components
-          </p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {graphs?.map((g) => (
+            <Link
+              key={g.id}
+              href={`/canvas/${g.id}`}
+              className="block rounded-xl p-4 transition-colors hover:border-[var(--border-hover)]"
+              style={{ background: 'var(--surface-2)', border: '1px solid var(--border-subtle)' }}
+            >
+              <p className="mb-1 truncate" style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
+                {g.name}
+              </p>
+              {g.description && (
+                <p className="text-[11px] mb-3 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{g.description}</p>
+              )}
+              <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-muted)' }}>
+                v{g.version} · {g.nodeCount} nodes · {new Date(g.updatedAt).toLocaleDateString()}
+              </p>
+            </Link>
+          ))}
         </div>
-      </div>
-      <div className="p-2 flex flex-col gap-1.5 overflow-y-auto flex-1">
-        {PALETTE_NODES.map((n) => <PaletteNode key={n.type} {...n} />)}
-      </div>
-      <div className="p-2.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        <div className="flex items-center gap-1.5 justify-center">
-          <GripVertical size={8} style={{ color: 'var(--text-ghost)' }} />
-          <p style={{ fontFamily: 'JetBrains Mono', fontSize: '7px', color: 'var(--text-ghost)', letterSpacing: '0.1em' }}>DRAG TO CANVAS</p>
-        </div>
-      </div>
-    </aside>
-  )
-}
-
-// ─── Page ────────────────────────────────────────────────────────────────────
-
-export default function CanvasPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: graphId } = use(params)
-  const { loadGraph, activeRunId } = useGraphStore()
-  const [toolLibraryOpen, setToolLibraryOpen] = useState(false)
-
-  useEffect(() => {
-    if (!graphId) return
-    fetch(`/api/graphs/${graphId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.graphJson) {
-          loadGraph(data.graphJson, { id: data.id, name: data.name, version: data.version })
-        }
-      })
-      .catch(console.error)
-  }, [graphId, loadGraph])
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') e.preventDefault()
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
-
-  return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--void)' }}>
-      <TopToolbar graphId={graphId} onOpenToolLibrary={() => setToolLibraryOpen(true)} />
-      <div className="flex flex-1 min-h-0">
-        <NodePalette />
-        <ReactFlowProvider>
-          <main className="flex-1 min-w-0 relative">
-            <Canvas />
-          </main>
-        </ReactFlowProvider>
-        <NodeConfigPanel />
-        <TracePanel
-          runId={activeRunId}
-          onGateApprove={async () => {
-            if (!activeRunId) return
-            await fetch(`/api/runs/${activeRunId}/gate`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ decision: 'approve' }),
-            })
-          }}
-          onGateReject={async () => {
-            if (!activeRunId) return
-            await fetch(`/api/runs/${activeRunId}/gate`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ decision: 'reject' }),
-            })
-          }}
-        />
-      </div>
-
-      <ToolLibrary open={toolLibraryOpen} onOpenChange={setToolLibraryOpen} />
+      </main>
     </div>
   )
 }
