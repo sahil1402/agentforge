@@ -1,0 +1,18 @@
+# Execution engine
+fastapi>=0.115
+uvicorn[standard]>=0.30
+asyncpg>=0.30
+python-dotenv>=1.0
+
+# What generated graphs import (versions the transpiler output was verified against)
+langgraph==1.2.19
+langchain-core==1.7.4
+langchain-openai==1.7.3
+langchain-anthropic==1.7.9
+langchain-mistralai==1.1.6
+langchain-ollama==1.1.0
+langchain-huggingface==1.2.3
+httpx==0.28.1  # starter registry tools
+
+# Tests
+pytest>=8
