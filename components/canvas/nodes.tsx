@@ -9,6 +9,7 @@ import type {
   RouterNodeData, HumanGateNodeData, NodeType,
 } from '@/lib/types'
 import { useGraphStore } from '@/store/graph-store'
+import { resolveGate } from '@/lib/runs'
 import { Brain, Wrench, Database, GitBranch, UserCheck, Cpu, Zap, CircleDot, Sparkles } from 'lucide-react'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -212,8 +213,12 @@ export const RouterNode = memo(function RouterNode({ id, data, selected }: NodeP
 // ─── Human Gate ───────────────────────────────────────────────────────────────
 
 export const HumanGateNode = memo(function HumanGateNode({ id, data, selected }: NodeProps & { data: HumanGateNodeData }) {
-  const { runStatus, activeNodeIds } = useGraphStore()
+  const { runStatus, activeNodeIds, activeRunId } = useGraphStore()
   const isGatePending = runStatus === 'AWAITING_HUMAN' && activeNodeIds.has(id)
+  const decide = (decision: 'approve' | 'reject') => (e: React.MouseEvent) => {
+    e.stopPropagation() // don't select the node
+    if (activeRunId) resolveGate(activeRunId, decision)
+  }
 
   return (
     <NodeWrapper id={id} nodeType="human_gate" selected={selected}>
@@ -234,10 +239,10 @@ export const HumanGateNode = memo(function HumanGateNode({ id, data, selected }:
           <div className="flex gap-2">
             <button className="flex-1 h-6 rounded-md text-[9px] font-semibold transition-all active:scale-[0.97]"
               style={{ background: 'rgba(0,229,195,0.1)', color: '#00E5C3', border: '1px solid rgba(0,229,195,0.2)' }}
-              onClick={(e) => e.stopPropagation()}>✓ Approve</button>
+              onClick={decide('approve')}>✓ Approve</button>
             <button className="flex-1 h-6 rounded-md text-[9px] font-semibold transition-all active:scale-[0.97]"
               style={{ background: 'rgba(255,107,129,0.1)', color: '#FF6B81', border: '1px solid rgba(255,107,129,0.2)' }}
-              onClick={(e) => e.stopPropagation()}>✕ Reject</button>
+              onClick={decide('reject')}>✕ Reject</button>
           </div>
         </div>
       )}

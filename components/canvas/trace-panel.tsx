@@ -120,7 +120,10 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
     const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/ws/runs/${runId}`)
     ws.onmessage = (msg) => handleTraceEvent(JSON.parse(msg.data) as TraceEvent)
     ws.onerror = console.error
-    return () => ws.close()
+    return () => {
+      ws.onerror = null // closing on purpose (unmount / StrictMode remount) is not an error
+      ws.close()
+    }
   }, [runId])
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
+import { enableMapSet } from 'immer'
 import {
   type Node,
   type Edge,
@@ -11,6 +12,9 @@ import {
   addEdge,
 } from '@xyflow/react'
 import { LEGACY_MODEL_ALIASES, type AnyNodeData, type GraphSchema, type NodeType, type RouterNodeData, type RunStatus } from '@/lib/types'
+
+// Run state keeps node ids in Sets, which immer only drafts with this plugin.
+enableMapSet()
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

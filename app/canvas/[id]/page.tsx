@@ -14,6 +14,7 @@ import { useGraphStore } from '@/store/graph-store'
 import { NODE_COLORS, type NodeType } from '@/lib/types'
 import { ToolLibrary } from '@/components/canvas/tool-library'
 import { CodePreview } from '@/components/canvas/code-preview'
+import { cancelRun, resolveGate } from '@/lib/runs'
 
 const Canvas          = dynamic(() => import('@/components/canvas/canvas'),           { ssr: false })
 const NodeConfigPanel = dynamic(() => import('@/components/canvas/node-config-panel'), { ssr: false })
@@ -71,7 +72,7 @@ function PaletteNode({ type, label, Icon, desc }: typeof PALETTE_NODES[0]) {
 function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: string; onOpenToolLibrary: () => void; onOpenCode: () => void }) {
   const router = useRouter()
   const {
-    graphName, isDirty, graphVersion, runStatus,
+    graphName, isDirty, graphVersion, runStatus, activeRunId,
     setGraphName, clearRunState,
   } = useGraphStore()
 
@@ -199,7 +200,7 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
         </button>
 
         {isRunning ? (
-          <button onClick={() => clearRunState()} className="af-btn af-btn-stop">
+          <button onClick={() => { if (activeRunId) cancelRun(activeRunId); clearRunState() }} className="af-btn af-btn-stop">
             <Square size={9} className="fill-current" />
             Stop
           </button>
@@ -276,22 +277,8 @@ export default function CanvasPage({ params }: { params: Promise<{ id: string }>
         <NodeConfigPanel />
         <TracePanel
           runId={activeRunId}
-          onGateApprove={async () => {
-            if (!activeRunId) return
-            await fetch(`/api/runs/${activeRunId}/gate`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ decision: 'approve' }),
-            })
-          }}
-          onGateReject={async () => {
-            if (!activeRunId) return
-            await fetch(`/api/runs/${activeRunId}/gate`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ decision: 'reject' }),
-            })
-          }}
+          onGateApprove={() => { if (activeRunId) resolveGate(activeRunId, 'approve') }}
+          onGateReject={() => { if (activeRunId) resolveGate(activeRunId, 'reject') }}
         />
       </div>
       <ToolLibrary open={toolLibraryOpen} onOpenChange={setToolLibraryOpen} />
