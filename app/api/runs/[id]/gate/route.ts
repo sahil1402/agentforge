@@ -26,9 +26,8 @@ export async function POST(
     )
   }
 
-  // Forward decision to the FastAPI execution engine first — only record the
-  // resolution once the engine has actually accepted it.
-  // The Celery worker is paused waiting for this signal via Redis
+  // Forward the decision to the execution engine; it resumes the run and records
+  // the GATE_RESOLVED event itself (it owns run events and their sequence).
   try {
     const res = await fetch(`${process.env.BACKEND_URL}/runs/${runId}/gate`, {
       method: 'POST',
@@ -39,21 +38,6 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: 'Execution engine unavailable' }, { status: 503 })
   }
-
-  // Record the gate resolution event
-  const lastEvent = await prisma.runEvent.findFirst({
-    where: { runId },
-    orderBy: { sequence: 'desc' },
-  })
-
-  await prisma.runEvent.create({
-    data: {
-      runId,
-      eventType: 'GATE_RESOLVED',
-      payload: { decision },
-      sequence: (lastEvent?.sequence ?? 0) + 1,
-    },
-  })
 
   return NextResponse.json({ success: true, decision })
 }

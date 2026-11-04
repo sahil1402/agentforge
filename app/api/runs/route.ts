@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import type { GraphSchema } from '@/lib/types'
+import { transpile, type TranspileResult } from '@/lib/transpiler/transpile'
+import { TranspileError } from '@/lib/transpiler/errors'
+
+// Transpiling reads templates from the filesystem.
+export const runtime = 'nodejs'
 
 // POST /api/runs — dispatch a new graph execution
 export async function POST(req: NextRequest) {
@@ -17,7 +23,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Graph not found' }, { status: 404 })
   }
 
-  // 2. Create Run record immediately — status PENDING
+  // 2. Transpile first — an unsupported graph is rejected before any run exists
+  let program: TranspileResult
+  try {
+    const tools = await prisma.tool.findMany({ select: { name: true, description: true, code: true } })
+    program = transpile(graph.graphJson as unknown as GraphSchema, { tools })
+  } catch (e) {
+    if (e instanceof TranspileError) {
+      return NextResponse.json({ error: e.message, code: e.code }, { status: 422 })
+    }
+    throw e
+  }
+
+  // 3. Create Run record — the engine moves it to RUNNING and owns its status from there
   const run = await prisma.run.create({
     data: {
       graphId: body.graphId,
@@ -27,16 +45,15 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  // 3. Enqueue Celery task via HTTP to the FastAPI backend
-  //    The FastAPI backend proxies the task to Celery
+  // 4. Hand the generated code to the FastAPI execution engine
   try {
     const res = await fetch(`${process.env.BACKEND_URL}/runs/${run.id}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        runId:     run.id,
-        graphJson: graph.graphJson,
-        input:     body.input,
+        code:    program.code,
+        nodeIds: program.nodeIds,
+        input:   body.input ?? {},
       }),
     })
     if (!res.ok) throw new Error(`Backend responded ${res.status}`)
@@ -48,12 +65,6 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ error: 'Execution engine unavailable' }, { status: 503 })
   }
-
-  // 4. Update run status to RUNNING
-  await prisma.run.update({
-    where: { id: run.id },
-    data: { status: 'RUNNING' },
-  })
 
   // 5. Return run_id immediately — frontend opens WebSocket
   return NextResponse.json({ runId: run.id, status: 'RUNNING' }, { status: 201 })
