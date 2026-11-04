@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { transpile } from '@/lib/transpiler/transpile'
@@ -736,6 +736,20 @@ const PYTHON = ['python', 'python3'].find((bin) => spawnSync(bin, ['--version'])
     rmSync(dir, { recursive: true, force: true })
     expect(res.stderr).toBe('')
     expect(res.status).toBe(0)
+  })
+})
+
+// ── execution engine fixtures ────────────────────────────────────────────────
+// backend/tests runs these generated graphs with fake models, so they must match
+// the transpiler. Regenerate with: UPDATE_FIXTURES=1 npx jest transpile
+
+describe('backend test fixtures match the transpiler', () => {
+  test.each(['research', 'support', 'code_review'] as const)('%s', (name) => {
+    const file = path.join(process.cwd(), 'backend', 'tests', 'fixtures', `${name}.json`)
+    const { code, nodeIds } = transpile(getTemplate(name), { tools: REGISTRY })
+    const expected = `${JSON.stringify({ code, nodeIds }, null, 2)}\n`
+    if (process.env.UPDATE_FIXTURES) writeFileSync(file, expected)
+    expect(readFileSync(file, 'utf8')).toBe(expected)
   })
 })
 
