@@ -1,7 +1,7 @@
 def {{ name }}(state: AgentState) -> AgentState:
     {{ doc }}
     last = message_text(state["messages"][-1]) if state["messages"] else ""
-    decision = interrupt({"prompt": {{ prompt }}, "last_output": last})
+    decision = interrupt({"prompt": {{ prompt }}, "last_output": last, "timeout_seconds": {{ timeout }}})
     if not (isinstance(decision, dict) and decision.get("approved")):
         raise GateRejected({{ rejected }})
     return {"messages": []}

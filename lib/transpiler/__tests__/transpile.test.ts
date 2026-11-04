@@ -534,11 +534,25 @@ describe('transpile — human gate', () => {
     expect(order).toEqual(['draft', 'review', 'publish'])
     expect(code).toContain('from langgraph.types import interrupt')
     expect(code).toContain('def review(state: AgentState) -> AgentState:')
-    expect(code).toContain('decision = interrupt({"prompt": """Ship this draft?""", "last_output": last})')
+    expect(code).toContain('decision = interrupt({"prompt": """Ship this draft?""", "last_output": last, "timeout_seconds": 300})')
     expect(code).toContain('raise GateRejected("Rejected at gate \\"review\\"")')
     expect(code).toContain('builder.add_edge("draft", "review")')
     expect(code).toContain('builder.add_edge("review", "publish")')
     expect(code.trimEnd().endsWith('graph = builder.compile(checkpointer=InMemorySaver())')).toBe(true)
+  })
+
+  test('a gate timeout of 0 means wait forever (None)', () => {
+    const graph: GraphSchema = { nodes: [gateNode('g')], edges: [] }
+    graph.nodes[0].data = { ...graph.nodes[0].data, timeoutSeconds: 0 } as GraphNode['data']
+    expect(transpile(graph).code).toContain('"timeout_seconds": None})')
+  })
+
+  test('nodeIds maps generated node names back to graph node ids', () => {
+    const { nodeIds } = transpile({
+      nodes: [agentNode('my-agent'), gateNode('if')],
+      edges: [{ id: 'e1', source: 'my-agent', target: 'if' }],
+    })
+    expect(nodeIds).toEqual({ my_agent: 'my-agent', if_2: 'if' })
   })
 
   test('graphs without gates do not import interrupt or a checkpointer', () => {

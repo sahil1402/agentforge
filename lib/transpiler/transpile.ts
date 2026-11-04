@@ -124,6 +124,8 @@ export interface TranspileResult {
   code: string
   /** Node ids in execution order — handy for the caller / future tracing. */
   order: string[]
+  /** Generated LangGraph node name → graph node id (the engine maps trace events back with it). */
+  nodeIds: Record<string, string>
 }
 
 export interface TranspileOptions {
@@ -153,6 +155,7 @@ export function transpile(graph: GraphSchema, options: TranspileOptions = {}): T
         name,
         doc: pyTripleQuoted(data.label ?? step.node.id),
         prompt: pyTripleQuoted(data.prompt ?? ''),
+        timeout: data.timeoutSeconds > 0 ? pyNumber(data.timeoutSeconds) : 'None',
         rejected: pyString(`Rejected at gate "${data.label ?? step.node.id}"`),
       }).trimEnd()
     }
@@ -201,5 +204,7 @@ export function transpile(graph: GraphSchema, options: TranspileOptions = {}): T
     joins: p.joins.map((j) => ({ from: `[${j.from.map(ref).join(', ')}]`, to: ref(j.to) })),
   })
 
-  return { code: `${code.trim()}\n`, order: p.order }
+  const nodeIds = Object.fromEntries(p.steps.map((s) => [nameOf.get(s.node.id)!, s.node.id]))
+  // Templates may be checked out with CRLF (git autocrlf); output must not depend on it.
+  return { code: `${code.replace(/\r\n/g, '\n').trim()}\n`, order: p.order, nodeIds }
 }
