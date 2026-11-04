@@ -3,12 +3,14 @@ async def {{ name }}(state: AgentState) -> AgentState:
     {{ doc }}
     tools = [{{ tools }}]
     llm = {{ llm }}.bind_tools(tools)
-    messages = [SystemMessage(content={{ system_prompt }})] + state["messages"]
-    return {"messages": [await run_with_tools(llm, messages, tools)]}
+    reply = await run_with_tools(llm, agent_input({{ system_prompt }}, state["messages"]), tools)
+    reply.name = "{{ name }}"
+    return {"messages": [reply]}
 {% else %}
 def {{ name }}(state: AgentState) -> AgentState:
     {{ doc }}
     llm = {{ llm }}
-    messages = [SystemMessage(content={{ system_prompt }})] + state["messages"]
-    return {"messages": [llm.invoke(messages)]}
+    reply = llm.invoke(agent_input({{ system_prompt }}, state["messages"]))
+    reply.name = "{{ name }}"
+    return {"messages": [reply]}
 {% endif %}

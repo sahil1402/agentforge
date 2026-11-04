@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import ConfigDict
 
-CALLS: list[tuple[str, int]] = []  # (model, number of messages seen) per LLM call
+CALLS: list[tuple[str, list[BaseMessage]]] = []  # (model, messages it was sent) per LLM call
 TOOL_ARGS = {"web_search": {"query": "q"}, "http_request": {"url": "https://example.com"}}
 
 
@@ -35,7 +35,7 @@ class FakeChat(BaseChatModel):
         return self.model_copy(update={"bound_tools": list(tools)})
 
     def _generate(self, messages: list[BaseMessage], stop: Any = None, run_manager: Any = None, **_: Any) -> ChatResult:
-        CALLS.append((self.model, len(messages)))
+        CALLS.append((self.model, messages))
         # With tools bound: call every tool once, then answer on the next round.
         if self.bound_tools and not any(isinstance(m, ToolMessage) for m in messages):
             msg = AIMessage(content="", tool_calls=[

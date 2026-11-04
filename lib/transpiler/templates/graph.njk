@@ -8,7 +8,7 @@ from langgraph.graph.message import add_messages
 from langgraph.types import interrupt
 from langgraph.checkpoint.memory import InMemorySaver
 {% endif %}
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 {% if has_tools %}
 from langchain_core.tools import tool
 {% endif %}
@@ -19,7 +19,6 @@ from {{ imp.module }} import {{ imp.cls }}
 
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
-{% if needs_text %}
 
 
 def message_text(message) -> str:
@@ -28,7 +27,16 @@ def message_text(message) -> str:
     if isinstance(content, str):
         return content
     return "".join(b.get("text", "") for b in content if isinstance(b, dict))
-{% endif %}
+
+
+def agent_input(system_prompt: str, history: list) -> list:
+    """System prompt + the shared history as ONE user turn: earlier agents' replies are context for
+    this agent, not its own turns (and Claude 5.5 models reject requests ending on an assistant turn)."""
+    parts = [
+        f"{'Request' if m.type == 'human' else 'Output from ' + (m.name or 'a previous step')}:\n{message_text(m)}"
+        for m in history
+    ]
+    return [SystemMessage(content=system_prompt), HumanMessage(content="\n\n".join(parts) or "(no input)")]
 {% if has_gates %}
 
 

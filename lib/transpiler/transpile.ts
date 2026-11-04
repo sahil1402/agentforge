@@ -83,7 +83,8 @@ function resolveModel(node: GraphNode, value: string): { provider: ProviderImpor
 /** Module-level names the generated code defines or imports — node names must not shadow them. */
 const RESERVED = [
   'AgentState', 'Annotated', 'TypedDict', 'StateGraph', 'START', 'END', 'add_messages', 'SystemMessage',
-  'builder', 'graph', 'tool', 'interrupt', 'InMemorySaver', 'message_text', 'run_with_tools',
+  'HumanMessage', 'builder', 'graph', 'tool', 'interrupt', 'InMemorySaver', 'message_text', 'agent_input',
+  'run_with_tools',
   'MAX_TOOL_ROUNDS', 'GateRejected', 'state',
   // Python keywords / builtins a node id could plausibly collide with
   'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else',
@@ -188,7 +189,6 @@ export function transpile(graph: GraphSchema, options: TranspileOptions = {}): T
     imports: [...imports.values()],
     has_tools: p.tools.length > 0,
     has_gates: hasGates,
-    needs_text: hasGates || p.routers.length > 0,
     tools: p.tools.map((t) => ({ name: t.name, code: t.code.trimEnd(), description: pyString(t.description) })),
     nodes,
     routing_fns: routingFns,

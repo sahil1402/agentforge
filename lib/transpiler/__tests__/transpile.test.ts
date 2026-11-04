@@ -574,7 +574,7 @@ describe('transpile — tools', () => {
     expect(code).toContain('async def planner(state: AgentState) -> AgentState:')
     expect(code).toContain('tools = [web_search, http_request]')
     expect(code).toContain('.bind_tools(tools)')
-    expect(code).toContain('return {"messages": [await run_with_tools(llm, messages, tools)]}')
+    expect(code).toContain('reply = await run_with_tools(llm, agent_input(')
     // The agent without tools stays a plain sync node.
     expect(code).toContain('def synth(state: AgentState) -> AgentState:')
     expect(code).not.toContain('async def synth')

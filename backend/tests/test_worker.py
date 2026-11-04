@@ -120,7 +120,10 @@ def test_parallel_fan_out_joins_once() -> None:
     assert {n for t, n in s[2:8] if t == "NODE_START"} == {"style", "bugs", "perf"}
     assert s[-3:] == [("NODE_START", "summary"), ("NODE_END", "summary"), ("COMPLETE", None)]
     assert events[-1]["payload"] == {"output": "answer from claude-sonnet-5-5", "tokens": 5 * 15}
-    assert fakes.CALLS[-1] == ("claude-sonnet-5-5", 6)  # system + query + analyzer + 3 reviews
+    model, prompt = fakes.CALLS[-1]
+    assert model == "claude-sonnet-5-5"
+    assert [m.type for m in prompt] == ["system", "human"]  # always ends on a user turn
+    assert all(f"Output from {n}:" in prompt[1].content for n in ("analyzer", "style", "bugs", "perf"))
 
 
 def test_tokens_are_attributed_to_their_node() -> None:
