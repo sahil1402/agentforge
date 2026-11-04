@@ -6,9 +6,11 @@
   in-process WebSocket fan-out); add Celery/Redis only when multiple workers are needed.
 - A canvas **Tool node = a tool its connected agent can call** (not a fixed pipeline step).
 - **Kubernetes/Helm is cut from v1**; deploy = FastAPI wrapper + Dockerfile.
-- Order: Phase 0 cleanup ✅ → Phase 1 transpiler ✅ → Phase 2 execution engine ✅ → Phase 3 live
-  canvas → Phase 4 test harness → Phase 5 deploy → **full UI revamp** (user supplies the UI
-  skills/plugins; agreed 2026-11-02 — don't polish the current UI before then) → Phase 6 launch.
+- Order: Phase 0 cleanup ✅ → Phase 1 transpiler ✅ → Phase 2 execution engine ✅ → Phase 2.5
+  (real-model check, run input, pricing) → Phase 3 live canvas → Phase 4 test harness → **full UI
+  revamp** (user supplies the UI skills/plugins; moved before deploy 2026-11-03 — don't polish the
+  current UI before then) → Phase 5 deploy → Phase 6 launch. All work happens sequentially on
+  `main` in one checkout (no parallel worktree).
 - Commits are authored by the user (sahil1402); no Claude co-author trailer unless asked. The user
   pushes to GitHub.
 
@@ -43,8 +45,7 @@ repo's `.env.local`). Next owns runs; the engine owns run **status and events** 
 - Tests: `backend/tests` (pytest, `FakeChat` in `tests/fakes.py`; API tests spawn real workers via
   `tests.fake_worker`). `backend/tests/fixtures/*.json` are transpiler output, kept identical by a
   Jest test — regenerate with `UPDATE_FIXTURES=1 npx jest transpile`.
-- Not yet verified against real provider APIs (no keys in `.env.local`) — the trailing
-  assistant-message risk below is still open.
+- Not yet verified against real provider APIs (no keys in `.env.local`).
 
 ## Transpiler (Week 3 — complete)
 
@@ -78,9 +79,10 @@ Execution is the engine's job (below).
 - **Tests:** `lib/transpiler/__tests__/transpile.test.ts`, incl. `py_compile` of every template's
   output (auto-skips without Python). Generated code is executed with fake models in `backend/tests`.
 - Output is always LF (templates may be checked out CRLF by git autocrlf).
-- **Known runtime risk for Phase 2:** agents share one message list, so a downstream agent sees
-  the previous agent's reply as the last (assistant) message — newer Claude models may reject a
-  trailing assistant turn. Verify with real APIs and adjust message assembly if needed.
+- **Agent prompts:** agents share one message list, but each agent is sent `agent_input()` —
+  system prompt + the whole history folded into ONE user message ("Request:", "Output from
+  <node>:"; replies carry `name` = node name). Claude 5.5 models 400 on a request ending with an
+  assistant turn, and earlier agents' replies are context, not the agent's own turns.
 
 ## Editor behavior worth knowing
 
