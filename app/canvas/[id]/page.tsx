@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useCallback, useState, useEffect, use } from 'react'
+import { useCallback, useState, useEffect, useRef, use } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useRouter } from 'next/navigation'
 import {
@@ -107,12 +107,17 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
     return () => window.removeEventListener('keydown', handler)
   }, [handleSave])
 
+  const lastQuery = useRef('')
   const handleRun = useCallback(async () => {
+    // shortcut: native prompt as the run input box; replace in the UI revamp.
+    const query = window.prompt('Input for this run', lastQuery.current)
+    if (query === null) return
+    lastQuery.current = query
     try {
       const res = await fetch('/api/runs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ graphId, input: { query: 'test input' } }),
+        body: JSON.stringify({ graphId, input: { query } }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)

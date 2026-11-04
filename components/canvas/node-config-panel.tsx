@@ -21,7 +21,9 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   // Hosted APIs
   'gpt-4o':            { input: 2.5,  output: 10  },
   'gpt-4o-mini':       { input: 0.15, output: 0.6 },
-  // shortcut: Claude 5.5 rates not filled in yet, so no cost estimate shows; add them from the Anthropic pricing page.
+  'claude-opus-5-5':   { input: 4,    output: 20  },
+  'claude-sonnet-5-5': { input: 2,    output: 10  },
+  'claude-haiku-5-5':  { input: 0.1,  output: 0.5 }, // prompts ≤100K tokens; $0.50/$2.50 beyond
   'mistral-large-latest': { input: 2, output: 6 },
   'llama3:70b':        { input: 0,    output: 0   }, // local via Ollama
   // HuggingFace Inference API (approximate rates)
