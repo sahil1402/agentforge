@@ -66,7 +66,7 @@ Visual graph → JSON DAG → Jinja2 transpiler → LangGraph Python → FastAPI
 
 ### 2. Live Execution Trace at Token-Level Granularity
 
-When you hit Run, a WebSocket connection streams structured trace events from the Celery worker through Redis pub/sub to your browser in real time:
+When you hit Run, a WebSocket connection streams structured trace events from the execution engine to your browser in real time:
 
 - **Active nodes pulse** with animated borders
 - **Edges light up** as data flows between agents
@@ -77,7 +77,7 @@ No other visual agent tool does this. Most show you a static graph; AgentForge s
 
 ### 3. Human-in-the-Loop as a First-Class Primitive
 
-The `HumanGate` node pauses execution mid-graph and shows an approval UI in the browser. Built on LangGraph's `interrupt()` primitive with a 30-second replay buffer — if you lose connection, you reconnect and pick up exactly where you left off.
+The `HumanGate` node pauses execution mid-graph and shows an approval UI in the browser. Built on LangGraph's `interrupt()` primitive. The engine replays a run's events to every new WebSocket connection, so if you lose connection you reconnect and pick up exactly where you left off.
 
 ### 4. Test Harness Built In
 
@@ -89,7 +89,7 @@ Define test cases with input payloads and expected agent execution paths. The re
 Edit graph → Save → Deploy
 ```
 
-Under the hood: transpile → wrap in FastAPI → Docker SDK builds image → push to registry → Kubernetes Helm chart applied → live URL returned with auto-generated OpenAPI spec. Under 60 seconds for a first deploy, under 15 for re-deploys.
+Under the hood: transpile → wrap in FastAPI → Docker image with an auto-generated OpenAPI spec. (Kubernetes/Helm is out of scope for v1.)
 
 ---
 
@@ -108,15 +108,15 @@ AgentForge is built in 5 fully decoupled layers:
 │  Topological sort · OpenAPI spec generator                          │
 ├─────────────────────────────────────────────────────────────────────┤
 │  LAYER 3 — EXECUTION ENGINE                                          │
-│  FastAPI · LangGraph runtime · Celery async workers                 │
-│  Tool registry · Sandboxed subprocess execution                     │
+│  FastAPI · LangGraph runtime · one worker subprocess per run        │
+│  Tool registry · Event log in run_events                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │  LAYER 4 — REAL-TIME LAYER                                           │
-│  WebSocket server · Redis pub/sub · Token streaming relay           │
-│  Reconnect + 30s replay buffer · Human gate signal channel          │
+│  WebSocket server · in-process fan-out · Token streaming relay      │
+│  Replay on reconnect · Human gate signal channel                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │  LAYER 5 — PERSISTENCE + DEPLOY                                      │
-│  PostgreSQL + Prisma · Docker SDK · Kubernetes Helm · GitHub Actions│
+│  PostgreSQL + Prisma · Docker · GitHub Actions                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,16 +124,16 @@ AgentForge is built in 5 fully decoupled layers:
 flowchart TD
     A([User clicks Run]) --> B[POST /api/runs]
     
-    B --> C[FastAPI creates Run record\nstatus: PENDING]
+    B --> C[Next.js transpiles the graph\ncreates Run record: PENDING]
     B --> F[Returns run_id immediately\nto frontend]
 
-    C --> D[Celery worker spawned\nvia Redis broker]
+    C --> D[FastAPI engine spawns a\nworker subprocess]
     D --> G[LangGraph executes graph]
 
     F --> E[Frontend opens WebSocket\n/ws/runs/run_id]
 
-    G --> H[Emits trace events to\nRedis pub/sub\nchannel: run:run_id]
-    E --> I[WebSocket server subscribes]
+    G --> H[Worker emits trace events\nengine stores them in run_events]
+    E --> I[Engine replays + streams\nthe run's events]
     H --> I
 
     I --> J[Relays events to browser]
@@ -230,12 +230,12 @@ Graph topology is stored as `JSONB` — fully flexible node/edge schema while ma
 | Animation | Framer Motion | Declarative animation for node pulse, edge glow, token stream | CSS animations — insufficient for data-driven states |
 | Backend | FastAPI | Async-native, handles REST + WebSocket in one process, Pydantic validation | Django — sync-first, WebSocket requires Channels |
 | Runtime | LangGraph | State machine maps 1:1 to visual graph. `interrupt()` for human gates. Solved routing | Custom runtime — conditional routing + checkpointing are hard problems |
-| Workers | Celery + Redis | Runs are 30–120s. API must stay non-blocking. Handles retries + scaling | Threading — no retry, no scaling, blocks event loop |
+| Workers | Subprocess per run | Runs are 30–120s and execute user code: a process keeps them off the API's event loop and isolates crashes. Celery + Redis come back when runs need multiple machines | Celery + Redis now — a broker and worker fleet before one server is the bottleneck |
 | Real-time | WebSockets | Bidirectional needed for human gate approval. Token latency too tight for polling | SSE — server-to-client only, can't send gate approval back |
-| Pub/Sub | Redis Pub/Sub | Traces are ephemeral. Sub-1ms delivery. Zero setup overhead | Kafka — persistent consumer groups overkill for ephemeral traces |
+| Fan-out | In-process queues | One engine process owns each run, so subscribers are local; events are also persisted for replay | Redis Pub/Sub — only needed once there are multiple engine processes |
 | Database | PostgreSQL + Prisma | JSONB for graph snapshots, Prisma for type-safe queries, ACID guarantees | MongoDB — JSONB in Postgres gives same flexibility + transactions |
 | Code gen | Jinja2 templates | One template per node type. Readable, debuggable, easy to extend | Python AST — powerful but fragile and hard to inspect |
-| Deploy | Docker + Kubernetes | Docker SDK for programmatic builds, Helm for scalable cloud deploy | Docker Compose only — insufficient for multi-user production |
+| Deploy | FastAPI wrapper + Dockerfile | Runs anywhere a container runs | Kubernetes/Helm — cut from v1 |
 
 ---
 
@@ -245,8 +245,7 @@ Graph topology is stored as `JSONB` — fully flexible node/edge schema while ma
 
 - Node.js 18+
 - PostgreSQL 14+ (or Docker)
-- Python 3.11+ (for backend, Week 4+)
-- Redis (for real-time, Week 5+)
+- Python 3.11+ (execution engine)
 
 ### 1. Clone and install
 
@@ -278,7 +277,12 @@ Edit `.env.local`:
 DATABASE_URL="postgresql://postgres:password@localhost:5432/agentforge"
 NEXT_PUBLIC_WS_URL="ws://localhost:8000"
 BACKEND_URL="http://localhost:8000"
+# Provider keys for the models your graphs use, e.g.
+OPENAI_API_KEY="..."
+ANTHROPIC_API_KEY="..."
 ```
+
+The execution engine reads the same `.env.local`.
 
 ### 4. Run migrations and seed
 
@@ -298,6 +302,18 @@ npm run dev
 ```
 
 Open [http://localhost:3100](http://localhost:3100) for the graph library, or jump straight to [http://localhost:3100/canvas/research-assistant](http://localhost:3100/canvas/research-assistant)
+
+### 6. Start the execution engine (needed for Run)
+
+```bash
+cd backend
+python -m venv .venv
+.venv/Scripts/activate        # macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --port 8000
+```
+
+Engine tests (fake models, no API keys): `python -m pytest` from `backend/`.
 
 ---
 
@@ -370,6 +386,14 @@ agentforge/
 │   ├── transpiler/               # Graph → LangGraph Python (walk, render, nunjucks templates)
 │   └── utils.ts                  # cn() utility
 │
+├── backend/                      # FastAPI execution engine
+│   ├── app/
+│   │   ├── main.py               # /runs/:id/start, /runs/:id/gate, WS /ws/runs/:id
+│   │   ├── runner.py             # one worker subprocess per run; persist + fan out events
+│   │   ├── worker.py             # runs the generated module, emits trace events
+│   │   └── db.py                 # asyncpg access to runs / run_events
+│   └── tests/                    # pytest with fake chat models; fixtures = transpiler output
+│
 ├── prisma/
 │   ├── schema.prisma             # 6-table PostgreSQL schema
 │   └── seed.ts                   # dev user, starter tools, example graph
@@ -386,10 +410,10 @@ agentforge/
 | **1** ✅ | Canvas foundation | React Flow canvas, 5 node types, PostgreSQL schema, 4 API routes |
 | **2** ✅ | Node configuration | Monaco editor, tool registry, model selector with cost estimation |
 | **3** ✅ | Graph → code transpiler | JSON DAG → LangGraph Python, 4 topological patterns, graph validator |
-| **4** | Execution engine | FastAPI, Celery workers, sandboxed subprocess, execution state machine |
+| **4** ✅ | Execution engine | FastAPI, worker subprocess per run, event log, human gates, live WebSocket trace |
 | **5** | Real-time streaming | Redis pub/sub, WebSocket server, live canvas animation |
 | **6** | Test harness | Test case UI, path assertion, regression runner, GitHub Actions CI hook |
-| **7** | One-click deploy | Docker image builder, Kubernetes Helm, version control + graph diff |
+| **7** | One-click deploy | FastAPI wrapper + Dockerfile, version control + graph diff |
 | **8** | Polish + launch | 3 example graphs, blog post, HN launch, GitHub stars goal: 500 |
 
 ---
@@ -401,12 +425,12 @@ agentforge/
 - [x] Node configuration panels
 - [x] PostgreSQL persistence with Prisma
 - [x] Jinja2 graph → LangGraph transpiler
-- [ ] FastAPI + Celery execution engine
-- [ ] Live WebSocket execution trace
+- [x] FastAPI execution engine
+- [x] Live WebSocket execution trace
 
 ### v1.1 — Quality + Deploy (Weeks 6–7)
 - [ ] Built-in test harness + regression runner
-- [ ] One-click Docker + Kubernetes deploy
+- [ ] One-click Docker deploy
 - [ ] Graph version control + side-by-side diff
 - [ ] Auto-generated OpenAPI spec for deployed graphs
 
