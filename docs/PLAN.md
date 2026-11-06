@@ -63,7 +63,7 @@ this file has **what is left, in order, split into tasks**. Tick boxes as tasks 
 - [x] **3.4 Router path.** Routers emit no event (they're routing functions, not nodes). Derive the
   taken branch in the UI: when a node starts, light the edge from its predecessor; untaken
   branches stay dim. *Check:* support template with "refund" lights router → gate only.
-- [ ] **3.5 Run history + replay.** History button (dead today) → list from the existing
+- [x] **3.5 Run history + replay.** History button (dead today) → list from the existing
   `GET /api/runs?graphId=` (last 20: status, input, duration, tokens). Clicking one sets it as the
   active run; the WebSocket already replays stored events, so the canvas re-animates. Reset node
   states before replay. *Check:* replaying a finished run shows the same path/output as live.

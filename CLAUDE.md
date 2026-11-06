@@ -93,6 +93,8 @@ Execution is the engine's job (below).
   redraws its edge, dragging from a route handle sets its target, deleting the edge clears it.
 - Routers emit no run events; `edges.tsx` lights a router's branch once its target node has run (the
   other branches stay dim).
+- History (toolbar) lists the last 20 runs from `GET /api/runs?graphId=`; clicking one makes it the
+  active run and the WebSocket replays its stored events, so the canvas re-animates.
 - Retired model values are upgraded on `loadGraph` (`LEGACY_MODEL_ALIASES`; transpiler also maps them).
 - Tailwind is v4: `app/globals.css` must use `@import "tailwindcss"` (the v3 `@tailwind` directives
   silently drop the theme — every spacing/sizing utility disappears).

@@ -11,7 +11,7 @@ import {
   Wrench as ToolsIcon, Code2,
 } from 'lucide-react'
 import { useGraphStore } from '@/store/graph-store'
-import { NODE_COLORS, type NodeType } from '@/lib/types'
+import { NODE_COLORS, type NodeType, type RunMetadata } from '@/lib/types'
 import { ToolLibrary } from '@/components/canvas/tool-library'
 import { CodePreview } from '@/components/canvas/code-preview'
 import { cancelRun, resolveGate } from '@/lib/runs'
@@ -77,6 +77,20 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
   } = useGraphStore()
 
   const [saving, setSaving] = useState(false)
+
+  // shortcut: plain dropdown list of the last 20 runs; the UI revamp restyles history.
+  const [history, setHistory] = useState<RunMetadata[] | null>(null) // null = closed
+  const toggleHistory = async () => {
+    if (history) return setHistory(null)
+    const res = await fetch(`/api/runs?graphId=${graphId}`)
+    if (res.ok) setHistory(await res.json())
+    else console.error(`History failed (HTTP ${res.status})`)
+  }
+  const replay = (run: RunMetadata) => {
+    setHistory(null)
+    clearRunState() // node states reset; the trace panel remounts and the WebSocket replays the stored events
+    useGraphStore.getState().setRunState(run.id, run.status)
+  }
 
   const handleSave = useCallback(async () => {
     setSaving(true)
@@ -185,9 +199,37 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
 
         <div className="w-px h-4" style={{ background: 'var(--border-subtle)' }} />
 
-        <button className="af-icon-btn" title="History">
-          <History size={13} />
-        </button>
+        <div className="relative">
+          <button onClick={toggleHistory} className="af-icon-btn" title="History">
+            <History size={13} />
+          </button>
+          {history && (
+            <div
+              className="absolute left-0 top-full mt-1 w-[380px] max-h-[320px] overflow-y-auto rounded-lg p-1 font-mono text-[10px]"
+              style={{ background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+            >
+              {history.length === 0 && <p className="p-2" style={{ color: 'var(--text-ghost)' }}>No runs yet</p>}
+              {history.map((run) => (
+                <button
+                  key={run.id}
+                  onClick={() => replay(run)}
+                  className="w-full text-left px-2 py-1.5 rounded-md hover:bg-white/[0.04] flex gap-2 items-baseline"
+                  title={run.errorMessage ?? undefined}
+                >
+                  <span className="w-[76px] flex-shrink-0" style={{ color: run.status === 'COMPLETE' ? '#9B8AFF' : run.status === 'FAILED' ? '#FF6B81' : '#00E5C3' }}>
+                    {run.status}
+                  </span>
+                  <span className="flex-1 truncate" style={{ color: 'var(--text-secondary)' }}>
+                    {String(run.inputPayload?.query ?? JSON.stringify(run.inputPayload))}
+                  </span>
+                  <span className="flex-shrink-0" style={{ color: 'var(--text-ghost)' }}>
+                    {run.durationMs != null ? `${(run.durationMs / 1000).toFixed(1)}s` : '—'} · {run.tokenCount ?? 0} tok · {new Date(run.createdAt).toLocaleTimeString()}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button className="af-icon-btn" title="Tests">
           <TestTube size={13} />
         </button>
