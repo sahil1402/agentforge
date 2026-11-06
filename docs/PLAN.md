@@ -49,7 +49,7 @@ this file has **what is left, in order, split into tasks**. Tick boxes as tasks 
 
 ## Phase 3 — Live canvas (make a run explain itself)
 
-- [ ] **3.1 Per-node stats in events.** `backend/app/worker.py`: on NODE_END, put
+- [x] **3.1 Per-node stats in events.** `backend/app/worker.py`: on NODE_END, put
   `{inputTokens, outputTokens, durationMs}` in the payload — usage from the AI message(s) that node
   wrote (task result writes), duration from NODE_START. Store keeps them per node.
   *Check:* pytest asserts code_review's NODE_END payloads carry tokens (FakeChat reports 10/5).

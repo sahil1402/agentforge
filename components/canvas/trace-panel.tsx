@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGraphStore } from '@/store/graph-store'
-import type { TraceEvent } from '@/lib/types'
+import type { NodeRunStats, TraceEvent } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { NODE_COLORS } from '@/lib/types'
 import {
@@ -62,7 +62,11 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
       const store = useGraphStore.getState()
       if (event.nodeId) {
         if (event.type === 'NODE_START') store.setNodeActive(event.nodeId)
-        if (event.type === 'NODE_END') store.setNodeComplete(event.nodeId)
+        if (event.type === 'NODE_END') {
+          // Runs recorded before stats existed have empty NODE_END payloads.
+          const { inputTokens = 0, outputTokens = 0, durationMs = 0 } = event.payload as Partial<NodeRunStats>
+          store.setNodeComplete(event.nodeId, { inputTokens, outputTokens, durationMs })
+        }
         if (event.type === 'ERROR') store.setNodeFailed(event.nodeId)
       }
       if (event.type === 'GATE_PENDING') store.setRunState(runId, 'AWAITING_HUMAN')

@@ -11,7 +11,7 @@ import {
   applyEdgeChanges,
   addEdge,
 } from '@xyflow/react'
-import { LEGACY_MODEL_ALIASES, type AnyNodeData, type GraphSchema, type NodeType, type RouterNodeData, type RunStatus } from '@/lib/types'
+import { LEGACY_MODEL_ALIASES, type AnyNodeData, type GraphSchema, type NodeRunStats, type NodeType, type RouterNodeData, type RunStatus } from '@/lib/types'
 
 // Run state keeps node ids in Sets, which immer only drafts with this plugin.
 enableMapSet()
@@ -43,6 +43,7 @@ interface GraphState {
   activeNodeIds: Set<string>
   completedNodeIds: Set<string>
   failedNodeIds: Set<string>
+  nodeStats: Record<string, NodeRunStats>
 }
 
 interface GraphActions {
@@ -70,7 +71,7 @@ interface GraphActions {
   // Execution state
   setRunState: (runId: string, status: RunStatus) => void
   setNodeActive: (nodeId: string) => void
-  setNodeComplete: (nodeId: string) => void
+  setNodeComplete: (nodeId: string, stats?: NodeRunStats) => void
   setNodeFailed: (nodeId: string) => void
   clearRunState: () => void
 
@@ -180,6 +181,7 @@ export const useGraphStore = create<GraphState & GraphActions>()(
     activeNodeIds: new Set(),
     completedNodeIds: new Set(),
     failedNodeIds: new Set(),
+    nodeStats: {},
 
     // ── Canvas mutations ──────────────────────────────────────────────────
     onNodesChange: (changes) =>
@@ -305,12 +307,14 @@ export const useGraphStore = create<GraphState & GraphActions>()(
         state.activeNodeIds.add(nodeId)
         state.completedNodeIds.delete(nodeId)
         state.failedNodeIds.delete(nodeId)
+        delete state.nodeStats[nodeId]
       }),
 
-    setNodeComplete: (nodeId) =>
+    setNodeComplete: (nodeId, stats) =>
       set((state) => {
         state.activeNodeIds.delete(nodeId)
         state.completedNodeIds.add(nodeId)
+        if (stats) state.nodeStats[nodeId] = stats
       }),
 
     setNodeFailed: (nodeId) =>
@@ -326,6 +330,7 @@ export const useGraphStore = create<GraphState & GraphActions>()(
         state.activeNodeIds = new Set()
         state.completedNodeIds = new Set()
         state.failedNodeIds = new Set()
+        state.nodeStats = {}
       }),
 
     // ── Load graph ────────────────────────────────────────────────────────

@@ -106,6 +106,13 @@ export interface TraceEvent {
   ts: string
 }
 
+/** NODE_END payload: usage of the messages the node wrote to state, and its wall time. */
+export interface NodeRunStats {
+  inputTokens: number
+  outputTokens: number
+  durationMs: number
+}
+
 export interface RunMetadata {
   id: string
   graphId: string
