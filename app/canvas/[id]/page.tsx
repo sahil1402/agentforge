@@ -121,6 +121,7 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      useGraphStore.getState().clearRunState() // a rerun must not keep the last run's node states and stats
       useGraphStore.getState().setRunState(data.runId, 'RUNNING')
     } catch (e) { console.error('Run failed', e) }
   }, [graphId])
@@ -281,6 +282,7 @@ export default function CanvasPage({ params }: { params: Promise<{ id: string }>
         </ReactFlowProvider>
         <NodeConfigPanel />
         <TracePanel
+          key={activeRunId ?? 'idle'} // remount per run so its traces, output and gate state start empty
           runId={activeRunId}
           onGateApprove={() => { if (activeRunId) resolveGate(activeRunId, 'approve') }}
           onGateReject={() => { if (activeRunId) resolveGate(activeRunId, 'reject') }}
