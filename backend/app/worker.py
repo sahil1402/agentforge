@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any, TextIO
 
@@ -35,10 +36,24 @@ def initial_input(payload: dict[str, Any]) -> str:
     return json.dumps(payload)
 
 
+def node_stats(result: Any, started: float) -> dict[str, int]:
+    """NODE_END payload: usage of the AI messages the node wrote to state, and its wall time.
+    shortcut: tool rounds inside run_with_tools never reach state, so their usage is not counted;
+    count them once the agent template returns them (or from the `messages` stream)."""
+    messages = result.get("messages", []) if isinstance(result, dict) else []
+    usage = [m.usage_metadata or {} for m in messages if isinstance(m, AIMessage)]
+    return {
+        "inputTokens": sum(u.get("input_tokens", 0) for u in usage),
+        "outputTokens": sum(u.get("output_tokens", 0) for u in usage),
+        "durationMs": round((time.monotonic() - started) * 1000),
+    }
+
+
 async def run(job: dict[str, Any], emit: Emit, read_decision: ReadDecision) -> None:
     """Execute the job's graph, emitting trace events; ends with exactly one COMPLETE or ERROR."""
     node_ids: dict[str, str] = job.get("nodeIds", {})
     running: dict[str, str] = {}  # task id → graph node id, for blaming errors
+    started: dict[str, float] = {}  # task id → monotonic start; a resumed gate keeps its first start
     failed: str | None = None  # node whose task reported the error (parallel branches)
     try:
         namespace: dict[str, Any] = {"__name__": "agentforge_graph"}
@@ -61,12 +76,14 @@ async def run(job: dict[str, Any], emit: Emit, read_decision: ReadDecision) -> N
                 elif (node_id := node_ids.get(chunk["name"])) is not None:
                     if "input" in chunk:
                         running[chunk["id"]] = node_id
+                        started.setdefault(chunk["id"], time.monotonic())
                         emit({"type": "NODE_START", "nodeId": node_id, "payload": {}})
                     elif chunk["error"]:
                         failed = failed or node_id  # the exception itself surfaces below
                     elif not chunk["interrupts"]:
                         running.pop(chunk["id"], None)
-                        emit({"type": "NODE_END", "nodeId": node_id, "payload": {}})
+                        emit({"type": "NODE_END", "nodeId": node_id,
+                              "payload": node_stats(chunk["result"], started.pop(chunk["id"], time.monotonic()))})
 
             state = await graph.aget_state(config) if graph.checkpointer else None
             pending = [(task.name, i) for task in state.tasks for i in task.interrupts] if state else []

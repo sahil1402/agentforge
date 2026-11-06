@@ -132,6 +132,12 @@ def test_tokens_are_attributed_to_their_node() -> None:
     assert ("summary", "answer from claude-sonnet-5-5") in chunks
 
 
+def test_node_end_carries_the_nodes_usage_and_duration() -> None:
+    ends = [e["payload"] for e in run(job("code_review")) if e["type"] == "NODE_END"]
+    assert [(p["inputTokens"], p["outputTokens"]) for p in ends] == [(10, 5)] * 5  # FakeChat reports 10/5 per reply
+    assert all(isinstance(p["durationMs"], int) and p["durationMs"] >= 0 for p in ends)
+
+
 def test_agent_tool_loop_runs_inside_the_node() -> None:
     events = run(job("research"))
     assert steps(events) == [("NODE_START", "planner"), ("NODE_END", "planner"),
@@ -154,6 +160,8 @@ def test_gate_approve_resumes_the_run() -> None:
     assert pending["payload"]["lastOutput"] == "I want a refund"
     assert pending["payload"]["timeoutSeconds"] == 300
     assert s[-3:] == [("NODE_START", "escalation"), ("NODE_END", "escalation"), ("COMPLETE", None)]
+    gate_end = next(e["payload"] for e in events if e["type"] == "NODE_END" and e["nodeId"] == "gate")
+    assert (gate_end["inputTokens"], gate_end["outputTokens"]) == (0, 0)  # gates write no AI messages
 
 
 @pytest.mark.parametrize(("decision", "label"), [(False, "reject"), (None, "timeout")])

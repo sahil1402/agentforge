@@ -29,7 +29,8 @@ repo's `.env.local`). Next owns runs; the engine owns run **status and events** 
   `run_events` (sequence from 1, ts set by the engine) and pushed to WebSocket subscribers;
   status: RUNNING → AWAITING_HUMAN ⇄ RUNNING → COMPLETE | FAILED. Idle timeout
   `RUN_IDLE_TIMEOUT_SECONDS` (300), disabled while a gate waits.
-- `worker.py`: JSON lines over stdin/stdout; streams LangGraph `tasks` (NODE_START/NODE_END),
+- `worker.py`: JSON lines over stdin/stdout; streams LangGraph `tasks` (NODE_START/NODE_END; NODE_END
+  carries `{inputTokens, outputTokens, durationMs}` from the messages the node wrote to state),
   `messages` (TOKEN_CHUNK, per node) and `values`; ends with exactly one COMPLETE `{output, tokens}`
   or ERROR `{message}` (blamed on the running node). Gates: GATE_PENDING `{prompt, lastOutput,
   timeoutSeconds}` → decision on stdin (or the gate's `timeout_seconds` → treated as reject) →
