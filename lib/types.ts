@@ -238,6 +238,31 @@ export const AVAILABLE_MODELS = [
   { value: 'phi-4',                label: 'Phi-4 (14B)',            provider: 'HuggingFace', apiModel: 'microsoft/phi-4' },
 ] as const
 
+/** USD per 1M tokens — approximate; update as needed. Keyed by `AVAILABLE_MODELS[].value`. */
+export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  // Hosted APIs
+  'gpt-4o':            { input: 2.5,  output: 10  },
+  'gpt-4o-mini':       { input: 0.15, output: 0.6 },
+  'claude-opus-5-5':   { input: 4,    output: 20  },
+  'claude-sonnet-5-5': { input: 2,    output: 10  },
+  'claude-haiku-5-5':  { input: 0.1,  output: 0.5 }, // prompts ≤100K tokens; $0.50/$2.50 beyond
+  'mistral-small-latest': { input: 0.1, output: 0.3 },
+  'mistral-large-latest': { input: 2, output: 6 },
+  'llama3:70b':        { input: 0,    output: 0   }, // local via Ollama
+  // HuggingFace Inference API (approximate rates)
+  'llama-3.3-70b':     { input: 0.88, output: 0.88 },
+  'mistral-small-3':   { input: 0.20, output: 0.20 },
+  'qwen-2.5-72b':      { input: 1.20, output: 1.20 },
+  'deepseek-v3':       { input: 0.27, output: 1.10 },
+  'phi-4':             { input: 0.07, output: 0.07 },
+}
+
+/** Estimated cost of a node's usage; undefined when the model (or its price) is unknown. */
+export function costUsd(model: string | undefined, stats: NodeRunStats): number | undefined {
+  const price = model ? MODEL_PRICING[model] : undefined
+  return price ? (stats.inputTokens * price.input + stats.outputTokens * price.output) / 1e6 : undefined
+}
+
 /** Retired/renamed model values that may still be in saved graphs → current value. */
 export const LEGACY_MODEL_ALIASES: Record<string, string> = {
   'claude-3-5-sonnet': 'claude-sonnet-5-5',

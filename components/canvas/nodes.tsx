@@ -3,7 +3,7 @@
 import { memo, useCallback } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { cn } from '@/lib/utils'
-import { NODE_COLORS, NODE_LABELS } from '@/lib/types'
+import { NODE_COLORS, NODE_LABELS, costUsd } from '@/lib/types'
 import type {
   AgentNodeData, ToolNodeData, MemoryNodeData,
   RouterNodeData, HumanGateNodeData, NodeType,
@@ -20,17 +20,19 @@ const NODE_ICONS: Record<NodeType, React.FC<any>> = {
 // ─── Shared wrapper ──────────────────────────────────────────────────────────
 
 interface NodeWrapperProps {
-  id: string; nodeType: NodeType; selected?: boolean; children: React.ReactNode
+  id: string; nodeType: NodeType; selected?: boolean; model?: string; children: React.ReactNode
 }
 
-function NodeWrapper({ id, nodeType, selected, children }: NodeWrapperProps) {
-  const { activeNodeIds, completedNodeIds, failedNodeIds, setSelectedNode } = useGraphStore()
+function NodeWrapper({ id, nodeType, selected, model, children }: NodeWrapperProps) {
+  const { activeNodeIds, completedNodeIds, failedNodeIds, nodeStats, setSelectedNode } = useGraphStore()
   const colors = NODE_COLORS[nodeType]
   const Icon = NODE_ICONS[nodeType]
 
   const isActive    = activeNodeIds.has(id)
   const isCompleted = completedNodeIds.has(id)
   const isFailed    = failedNodeIds.has(id)
+  const stats       = nodeStats[id] // present once the node has ended in the current run
+  const cost        = stats && costUsd(model, stats)
 
   return (
     <div
@@ -91,6 +93,13 @@ function NodeWrapper({ id, nodeType, selected, children }: NodeWrapperProps) {
 
       <div className="px-3.5 py-3">{children}</div>
 
+      {/* shortcut: plain text stats line, the UI revamp restyles it */}
+      {stats && (
+        <div className="px-3.5 pb-3 -mt-1" style={{ fontFamily: 'JetBrains Mono', fontSize: '8px', color: 'var(--text-muted)' }}>
+          {stats.inputTokens + stats.outputTokens} tok · {(stats.durationMs / 1000).toFixed(1)}s{cost !== undefined && ` · $${cost.toFixed(4)}`}
+        </div>
+      )}
+
       {/* Handles */}
       <Handle type="target" position={Position.Left}
         className="!w-[10px] !h-[10px] !rounded-full !border-2"
@@ -108,7 +117,7 @@ function NodeWrapper({ id, nodeType, selected, children }: NodeWrapperProps) {
 
 export const AgentNode = memo(function AgentNode({ id, data, selected }: NodeProps & { data: AgentNodeData }) {
   return (
-    <NodeWrapper id={id} nodeType="agent" selected={selected}>
+    <NodeWrapper id={id} nodeType="agent" selected={selected} model={data.model}>
       <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'Syne, sans-serif', marginBottom: '4px' }}>{data.label}</p>
       <div className="flex items-center gap-1.5 mb-2">
         <span className="flex items-center gap-1" style={{ fontFamily: 'JetBrains Mono', fontSize: '8px', padding: '2px 5px', borderRadius: '5px', background: 'rgba(155,138,255,0.08)', color: 'rgba(155,138,255,0.8)', border: '1px solid rgba(155,138,255,0.12)' }}>

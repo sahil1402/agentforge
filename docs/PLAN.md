@@ -53,7 +53,7 @@ this file has **what is left, in order, split into tasks**. Tick boxes as tasks 
   `{inputTokens, outputTokens, durationMs}` in the payload — usage from the AI message(s) that node
   wrote (task result writes), duration from NODE_START. Store keeps them per node.
   *Check:* pytest asserts code_review's NODE_END payloads carry tokens (FakeChat reports 10/5).
-- [ ] **3.2 Show stats + cost on nodes.** After a node ends, it shows tokens · time · $ (price ×
+- [x] **3.2 Show stats + cost on nodes.** After a node ends, it shows tokens · time · $ (price ×
   tokens). Move `MODEL_PRICING` out of `node-config-panel.tsx` into `lib/types.ts` next to
   `AVAILABLE_MODELS` so both use it. Run total in the trace panel.
   **Bug to fix here:** the trace panel counts TOKEN_CHUNK events as tokens

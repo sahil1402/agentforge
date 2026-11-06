@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useGraphStore } from '@/store/graph-store'
 import type { NodeRunStats, TraceEvent } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { NODE_COLORS } from '@/lib/types'
+import { NODE_COLORS, costUsd } from '@/lib/types'
 import {
   Loader2, Clock, Terminal,
   FileText, Activity, ChevronDown, ChevronRight,
@@ -18,9 +18,6 @@ interface NodeTrace {
   nodeType: string
   status: 'running' | 'done' | 'failed' | 'waiting'
   tokens: string[]
-  tokenCount: number
-  durationMs?: number
-  startedAt?: number
 }
 
 interface TracePanelProps {
@@ -30,9 +27,8 @@ interface TracePanelProps {
 }
 
 export default function TracePanel({ runId, onGateApprove, onGateReject }: TracePanelProps) {
-  const { runStatus } = useGraphStore()
+  const { runStatus, nodeStats, nodes } = useGraphStore()
   const [nodeTraces, setNodeTraces] = useState<Map<string, NodeTrace>>(new Map())
-  const [totalTokens, setTotalTokens] = useState(0)
   const [elapsedMs, setElapsedMs] = useState(0)
   const [activeTab, setActiveTab] = useState<'trace' | 'output' | 'logs'>('trace')
   const [finalOutput, setFinalOutput] = useState<string | null>(null)
@@ -87,8 +83,6 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
             nodeType: graphNode?.data.nodeType ?? 'agent',
             status: 'running',
             tokens: [],
-            tokenCount: 0,
-            startedAt: Date.now(),
           })
         }
 
@@ -96,16 +90,11 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
           next.set(existing.nodeId, {
             ...existing,
             tokens: [...existing.tokens, String(event.payload.chunk ?? '')],
-            tokenCount: existing.tokenCount + 1,
           })
         }
 
         if (event.type === 'NODE_END' && existing) {
-          next.set(existing.nodeId, {
-            ...existing,
-            status: 'done',
-            durationMs: existing.startedAt ? Date.now() - existing.startedAt : undefined,
-          })
+          next.set(existing.nodeId, { ...existing, status: 'done' })
         }
 
         if (event.type === 'ERROR' && existing) {
@@ -118,7 +107,6 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
       if (event.type === 'GATE_PENDING') setGatePending(true)
       if (event.type === 'GATE_RESOLVED') setGatePending(false)
       if (event.type === 'COMPLETE') setFinalOutput(String(event.payload.output ?? ''))
-      if (event.type === 'TOKEN_CHUNK') setTotalTokens((t) => t + 1)
     }
 
     const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/ws/runs/${runId}`)
@@ -137,6 +125,11 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
   const traces = Array.from(nodeTraces.values())
   const isRunning = runStatus === 'RUNNING' || runStatus === 'AWAITING_HUMAN'
   const completedCount = traces.filter((t) => t.status === 'done').length
+  // Real usage from NODE_END (store), not a count of streamed chunks.
+  const statsList = Object.entries(nodeStats)
+  const totalTokens = statsList.reduce((t, [, s]) => t + s.inputTokens + s.outputTokens, 0)
+  const totalCost = statsList.reduce(
+    (t, [id, s]) => t + (costUsd(nodes.find((n) => n.id === id)?.data.model, s) ?? 0), 0)
 
   const TABS = [
     { id: 'trace' as const, label: 'Trace',  Icon: Activity },
@@ -277,7 +270,7 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
               {[
                 { label: 'tokens', value: totalTokens.toLocaleString(), color: '#9B8AFF' },
                 { label: 'nodes', value: `${completedCount}/${traces.length}`, color: '#00E5C3' },
-                { label: 'est. cost', value: `$${(totalTokens * 0.000015).toFixed(4)}`, color: '#FFB547' },
+                { label: 'est. cost', value: `$${totalCost.toFixed(4)}`, color: '#FFB547' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-[var(--surface-0)] rounded-lg p-2 text-center border border-[var(--border-subtle)]">
                   <div className="font-mono text-[13px] font-bold text-[var(--text-primary)] leading-none" style={{ color }}>
@@ -342,6 +335,7 @@ function TraceNodeRow({ trace, idx, isLast }: { trace: NodeTrace; idx: number; i
   const [expanded, setExpanded] = useState(trace.status === 'running')
   const colors = NODE_COLORS[trace.nodeType as keyof typeof NODE_COLORS]
   const tokenText = trace.tokens.join('')
+  const stats = useGraphStore((s) => s.nodeStats[trace.nodeId])
 
   return (
     <motion.div
@@ -403,9 +397,9 @@ function TraceNodeRow({ trace, idx, isLast }: { trace: NodeTrace; idx: number; i
             {trace.status === 'running' && (
               <Loader2 size={11} className="text-[#00E5C3] animate-spin flex-shrink-0" />
             )}
-            {trace.durationMs && (
+            {stats && (
               <span className="font-mono text-[9px] text-[var(--text-ghost)]">
-                {(trace.durationMs / 1000).toFixed(1)}s
+                {(stats.durationMs / 1000).toFixed(1)}s
               </span>
             )}
           </div>
@@ -413,8 +407,7 @@ function TraceNodeRow({ trace, idx, isLast }: { trace: NodeTrace; idx: number; i
           {/* Meta line */}
           <div className="flex items-center gap-2 font-mono text-[9px] text-[var(--text-ghost)]">
             <span style={{ color: colors?.label }}>{trace.nodeType}</span>
-            <span>·</span>
-            <span>{trace.tokenCount} tokens</span>
+            {stats && <span>· {stats.inputTokens + stats.outputTokens} tokens</span>}
           </div>
 
           {/* Token preview — expanded or while running */}

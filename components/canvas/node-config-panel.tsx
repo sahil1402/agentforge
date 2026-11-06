@@ -7,32 +7,13 @@ import {
   Plus, DollarSign, Wrench, Check,
 } from 'lucide-react'
 import { useGraphStore, selectSelectedNode } from '@/store/graph-store'
-import { NODE_COLORS, NODE_LABELS, AVAILABLE_MODELS, type NodeType } from '@/lib/types'
+import { NODE_COLORS, NODE_LABELS, AVAILABLE_MODELS, MODEL_PRICING, type NodeType } from '@/lib/types'
 import type { AgentNodeData, ToolNodeData, MemoryNodeData, RouterNodeData, HumanGateNodeData } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { CodeEditor, approxTokenCount } from './code-editor'
 import { useTools } from '@/lib/use-tools'
 
 // Tool registry uses the shared `useTools` hook from `lib/use-tools`.
-
-// ─── Model pricing (USD per 1M tokens — approximate; update as needed) ────────
-
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  // Hosted APIs
-  'gpt-4o':            { input: 2.5,  output: 10  },
-  'gpt-4o-mini':       { input: 0.15, output: 0.6 },
-  'claude-opus-5-5':   { input: 4,    output: 20  },
-  'claude-sonnet-5-5': { input: 2,    output: 10  },
-  'claude-haiku-5-5':  { input: 0.1,  output: 0.5 }, // prompts ≤100K tokens; $0.50/$2.50 beyond
-  'mistral-large-latest': { input: 2, output: 6 },
-  'llama3:70b':        { input: 0,    output: 0   }, // local via Ollama
-  // HuggingFace Inference API (approximate rates)
-  'llama-3.3-70b':     { input: 0.88, output: 0.88 },
-  'mistral-small-3':   { input: 0.20, output: 0.20 },
-  'qwen-2.5-72b':      { input: 1.20, output: 1.20 },
-  'deepseek-v3':       { input: 0.27, output: 1.10 },
-  'phi-4':             { input: 0.07, output: 0.07 },
-}
 
 // ─── Reusable form components with premium styling ───────────────────────────
 
