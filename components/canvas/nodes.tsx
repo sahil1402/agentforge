@@ -24,7 +24,7 @@ interface NodeWrapperProps {
 }
 
 function NodeWrapper({ id, nodeType, selected, model, children }: NodeWrapperProps) {
-  const { activeNodeIds, completedNodeIds, failedNodeIds, nodeStats, setSelectedNode } = useGraphStore()
+  const { activeNodeIds, completedNodeIds, failedNodeIds, nodeStats, runError, setSelectedNode } = useGraphStore()
   const colors = NODE_COLORS[nodeType]
   const Icon = NODE_ICONS[nodeType]
 
@@ -93,10 +93,15 @@ function NodeWrapper({ id, nodeType, selected, model, children }: NodeWrapperPro
 
       <div className="px-3.5 py-3">{children}</div>
 
-      {/* shortcut: plain text stats line, the UI revamp restyles it */}
+      {/* shortcut: plain text stats and error lines, the UI revamp restyles them */}
       {stats && (
         <div className="px-3.5 pb-3 -mt-1" style={{ fontFamily: 'JetBrains Mono', fontSize: '8px', color: 'var(--text-muted)' }}>
           {stats.inputTokens + stats.outputTokens} tok · {(stats.durationMs / 1000).toFixed(1)}s{cost !== undefined && ` · $${cost.toFixed(4)}`}
+        </div>
+      )}
+      {isFailed && runError && (
+        <div className="px-3.5 pb-3 -mt-1 line-clamp-3 break-words" style={{ fontFamily: 'JetBrains Mono', fontSize: '8px', color: '#FF6B81' }}>
+          {runError}
         </div>
       )}
 

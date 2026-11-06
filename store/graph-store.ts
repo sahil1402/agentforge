@@ -44,6 +44,7 @@ interface GraphState {
   completedNodeIds: Set<string>
   failedNodeIds: Set<string>
   nodeStats: Record<string, NodeRunStats>
+  runError: string | null // message of the ERROR that ended the run (shown on the blamed node)
 }
 
 interface GraphActions {
@@ -69,7 +70,7 @@ interface GraphActions {
   markSaved: () => void
 
   // Execution state
-  setRunState: (runId: string, status: RunStatus) => void
+  setRunState: (runId: string, status: RunStatus, error?: string) => void
   setNodeActive: (nodeId: string) => void
   setNodeComplete: (nodeId: string, stats?: NodeRunStats) => void
   setNodeFailed: (nodeId: string) => void
@@ -182,6 +183,7 @@ export const useGraphStore = create<GraphState & GraphActions>()(
     completedNodeIds: new Set(),
     failedNodeIds: new Set(),
     nodeStats: {},
+    runError: null,
 
     // ── Canvas mutations ──────────────────────────────────────────────────
     onNodesChange: (changes) =>
@@ -296,10 +298,11 @@ export const useGraphStore = create<GraphState & GraphActions>()(
     markSaved: () => set((state) => { state.isDirty = false; state.isSaving = false }),
 
     // ── Execution state ───────────────────────────────────────────────────
-    setRunState: (runId, status) =>
+    setRunState: (runId, status, error) =>
       set((state) => {
         state.activeRunId = runId
         state.runStatus = status
+        state.runError = error ?? null
       }),
 
     setNodeActive: (nodeId) =>
@@ -331,6 +334,7 @@ export const useGraphStore = create<GraphState & GraphActions>()(
         state.completedNodeIds = new Set()
         state.failedNodeIds = new Set()
         state.nodeStats = {}
+        state.runError = null
       }),
 
     // ── Load graph ────────────────────────────────────────────────────────

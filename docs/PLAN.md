@@ -58,7 +58,7 @@ this file has **what is left, in order, split into tasks**. Tick boxes as tasks 
   `AVAILABLE_MODELS` so both use it. Run total in the trace panel.
   **Bug to fix here:** the trace panel counts TOKEN_CHUNK events as tokens
   (`trace-panel.tsx` `setTotalTokens((t) => t + 1)`) — use real token counts.
-- [ ] **3.3 Failure on the node.** The node that ERROR blames shows a red state + the error message
+- [x] **3.3 Failure on the node.** The node that ERROR blames shows a red state + the error message
   (store already has `setNodeFailed`; add the message).
 - [ ] **3.4 Router path.** Routers emit no event (they're routing functions, not nodes). Derive the
   taken branch in the UI: when a node starts, light the edge from its predecessor; untaken

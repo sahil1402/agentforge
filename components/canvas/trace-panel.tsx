@@ -27,7 +27,7 @@ interface TracePanelProps {
 }
 
 export default function TracePanel({ runId, onGateApprove, onGateReject }: TracePanelProps) {
-  const { runStatus, nodeStats, nodes } = useGraphStore()
+  const { runStatus, nodeStats, nodes, runError } = useGraphStore()
   const [nodeTraces, setNodeTraces] = useState<Map<string, NodeTrace>>(new Map())
   const [elapsedMs, setElapsedMs] = useState(0)
   const [activeTab, setActiveTab] = useState<'trace' | 'output' | 'logs'>('trace')
@@ -68,7 +68,7 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
       if (event.type === 'GATE_PENDING') store.setRunState(runId, 'AWAITING_HUMAN')
       if (event.type === 'GATE_RESOLVED') store.setRunState(runId, 'RUNNING')
       if (event.type === 'COMPLETE') store.setRunState(runId, 'COMPLETE')
-      if (event.type === 'ERROR') store.setRunState(runId, 'FAILED')
+      if (event.type === 'ERROR') store.setRunState(runId, 'FAILED', String(event.payload.message ?? 'Run failed'))
 
       // Updater must stay pure (StrictMode runs it twice) — replace entries, never mutate.
       setNodeTraces((prev) => {
@@ -246,6 +246,11 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
                   </button>
                 </div>
               </motion.div>
+            )}
+            {runError && (
+              <div className="mx-3 my-3 p-3 rounded-xl bg-[#FF6B81]/[0.05] border border-[#FF6B81]/20 font-mono text-[10px] text-[#FF6B81] whitespace-pre-wrap break-words">
+                {runError}
+              </div>
             )}
             <div ref={bottomRef} />
           </div>
