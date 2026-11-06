@@ -91,6 +91,8 @@ Execution is the engine's job (below).
 
 - Router edges are kept in sync with `routes` by the store (`syncRouterEdges`): editing a route
   redraws its edge, dragging from a route handle sets its target, deleting the edge clears it.
+- Routers emit no run events; `edges.tsx` lights a router's branch once its target node has run (the
+  other branches stay dim).
 - Retired model values are upgraded on `loadGraph` (`LEGACY_MODEL_ALIASES`; transpiler also maps them).
 - Tailwind is v4: `app/globals.css` must use `@import "tailwindcss"` (the v3 `@tailwind` directives
   silently drop the theme — every spacing/sizing utility disappears).

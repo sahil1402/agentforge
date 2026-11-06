@@ -20,7 +20,7 @@ export const AnimatedEdge = memo(function AnimatedEdge({
   label,
   markerEnd,
 }: EdgeProps) {
-  const { activeNodeIds, completedNodeIds } = useGraphStore()
+  const { activeNodeIds, completedNodeIds, failedNodeIds } = useGraphStore()
 
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX, sourceY, sourcePosition,
@@ -30,7 +30,10 @@ export const AnimatedEdge = memo(function AnimatedEdge({
   const isSourceActive  = activeNodeIds.has(source)
   const isTargetActive  = activeNodeIds.has(target)
   const isLive          = isSourceActive || isTargetActive
-  const isCompleted     = completedNodeIds.has(source) && !isSourceActive
+  // Routers emit no events, so a router's branch counts as taken once its target has run.
+  // shortcut: a target reached another way also lights the branch; emit a route event from the engine if that matters.
+  const targetRan       = completedNodeIds.has(target) || failedNodeIds.has(target)
+  const isCompleted     = (completedNodeIds.has(source) || targetRan) && !isLive
 
   const strokeColor = isLive
     ? '#00E5C3'
