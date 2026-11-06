@@ -13,6 +13,8 @@
   `main` in one checkout (no parallel worktree).
 - Commits are authored by the user (sahil1402); no Claude co-author trailer unless asked. The user
   pushes to GitHub.
+- **Task plan from Phase 2.5 to launch: [docs/PLAN.md](docs/PLAN.md)** — read it first, tick tasks
+  as they land.
 
 ## Execution engine (Phase 2 — complete)
 
