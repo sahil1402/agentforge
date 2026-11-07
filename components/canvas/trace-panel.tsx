@@ -97,8 +97,8 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
           next.set(existing.nodeId, { ...existing, status: 'done' })
         }
 
-        if (event.type === 'ERROR' && existing) {
-          next.set(existing.nodeId, { ...existing, status: 'failed' })
+        if (event.type === 'ERROR') { // the blamed node and any branch still running
+          for (const t of next.values()) if (t.status === 'running') next.set(t.nodeId, { ...t, status: 'failed' })
         }
 
         return next

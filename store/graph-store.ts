@@ -303,6 +303,10 @@ export const useGraphStore = create<GraphState & GraphActions>()(
         state.activeRunId = runId
         state.runStatus = status
         state.runError = error ?? null
+        if (status === 'FAILED') { // branches still running were killed with the run
+          for (const id of state.activeNodeIds) state.failedNodeIds.add(id)
+          state.activeNodeIds.clear()
+        }
       }),
 
     setNodeActive: (nodeId) =>

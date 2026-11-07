@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useCallback, useState, useEffect, useRef, use } from 'react'
+import { flushSync } from 'react-dom'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useRouter } from 'next/navigation'
 import {
@@ -88,8 +89,11 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
   }
   const replay = (run: RunMetadata) => {
     setHistory(null)
-    clearRunState() // node states reset; the trace panel remounts and the WebSocket replays the stored events
-    useGraphStore.getState().setRunState(run.id, run.status)
+    // Render the cleared state on its own: if this run is already the active one, batching both
+    // writes would leave the trace panel's key unchanged, so it would neither remount nor reconnect.
+    flushSync(clearRunState)
+    // The remounted trace panel's WebSocket replays the stored events.
+    useGraphStore.getState().setRunState(run.id, run.status, run.errorMessage ?? undefined)
   }
 
   const handleSave = useCallback(async () => {
@@ -223,7 +227,7 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
                     {String(run.inputPayload?.query ?? JSON.stringify(run.inputPayload))}
                   </span>
                   <span className="flex-shrink-0" style={{ color: 'var(--text-ghost)' }}>
-                    {run.durationMs != null ? `${(run.durationMs / 1000).toFixed(1)}s` : '—'} · {run.tokenCount ?? 0} tok · {new Date(run.createdAt).toLocaleTimeString()}
+                    {run.durationMs != null ? `${(run.durationMs / 1000).toFixed(1)}s` : '—'} · {run.tokenCount ?? 0} tok · {new Date(run.createdAt).toLocaleString()}
                   </span>
                 </button>
               ))}

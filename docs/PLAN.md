@@ -9,7 +9,7 @@ this file has **what is left, in order, split into tasks**. Tick boxes as tasks 
 |---|---|
 | 0 Cleanup · 1 Transpiler · 2 Execution engine | ✅ done, committed |
 | 2.5 Hardening | ✅ agent prompts (one user turn), run input, Claude 5.5 pricing — ⬜ real-model check |
-| 3 Live canvas | ⬜ partly free already: nodes light up, tokens stream, gates pause/resume |
+| 3 Live canvas | ✅ done, committed (3.1–3.5) |
 | 4 Test harness | ⬜ `TestCase` table exists, nothing uses it |
 | UI revamp | ⬜ user supplies the UI skills/plugins |
 | 5 Deploy | ⬜ `GraphVersion` snapshots are saved on every PATCH; nothing reads them |
