@@ -1,6 +1,6 @@
 # AgentForge — plan from Phase 2.5 to launch
 
-Written 2026-11-06 as a handoff to a fresh chat. CLAUDE.md has the architecture and the decisions;
+Written 2026-11-06 as a handoff to a fresh chat; state refreshed 2026-11-07 after Phases 3–4. CLAUDE.md has the architecture and the decisions;
 this file has **what is left, in order, split into tasks**. Tick boxes as tasks land.
 
 ## Where things stand
@@ -15,10 +15,19 @@ this file has **what is left, in order, split into tasks**. Tick boxes as tasks 
 | 5 Deploy | ⬜ `GraphVersion` snapshots are saved on every PATCH; nothing reads them |
 | 6 Launch | ⬜ |
 
-`main` is 9 commits ahead of `origin` — the user pushes.
+`main` is in sync with `origin` (2026-11-07) — the user pushes.
 
-**Verified green at handoff:** `npx jest` 51/51, `backend/.venv/Scripts/python -m pytest` 19/19
-(run from `backend/`), `npx tsc --noEmit`, `npx eslint .` (0/0).
+**Verified green at handoff:** `npx jest` 57/57, `backend/.venv/Scripts/python -m pytest` 21/21
+(run from `backend/`), `npx tsc --noEmit`, `npx eslint .` (0/0), `npx next build`.
+
+**Not yet verified live** (no Docker/DB, engine or provider keys were available in the sessions that
+built Phases 3–4 — do these once before the revamp, each is a few minutes):
+- 2.5.1 below (needs a key). Also confirms NODE_END token counts and $ with a real provider.
+- Phase 3 in the browser: stats line on nodes, error on the failed node, router branch lighting
+  (support template, "refund"), History → replay, including replaying the run that is already active.
+- Phase 4 end to end: Run → "Save as test" → TestTube → Run all → PASS; edit the path via PATCH → FAIL.
+- Engine startup once with a run left RUNNING in the DB (new SQL in `db.fail_active_runs`).
+- First CI run on GitHub (`prisma generate` in a clean checkout is the step most likely to need a tweak).
 
 ## Working rules (read before the first task)
 
