@@ -126,6 +126,24 @@ export interface RunMetadata {
   createdAt: string
 }
 
+// ─── Test Cases ──────────────────────────────────────────────────────────────
+
+export type TestResult = 'PASS' | 'FAIL' | 'PENDING'
+
+export interface TestCase {
+  id: string
+  graphId: string
+  name: string
+  inputPayload: Record<string, unknown>
+  /** Node ids that must have run, compared as a set (parallel branches have no order). Empty = not checked. */
+  expectedPath: string[]
+  /** Case-insensitive text the final output must contain. Null = not checked. */
+  expectedOutputContains: string | null
+  lastResult: TestResult | null
+  lastRunId: string | null
+  createdAt: string
+}
+
 // ─── Graph Store Entry ───────────────────────────────────────────────────────
 
 export interface GraphEntry {
