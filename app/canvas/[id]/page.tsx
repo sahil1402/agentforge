@@ -12,7 +12,7 @@ import {
   Wrench as ToolsIcon, Code2,
 } from 'lucide-react'
 import { useGraphStore } from '@/store/graph-store'
-import { NODE_COLORS, type NodeType, type RunMetadata } from '@/lib/types'
+import { NODE_COLORS, type NodeType, type RunMetadata, type TestCase } from '@/lib/types'
 import { ToolLibrary } from '@/components/canvas/tool-library'
 import { CodePreview } from '@/components/canvas/code-preview'
 import { cancelRun, resolveGate } from '@/lib/runs'
@@ -87,6 +87,29 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
     if (res.ok) setHistory(await res.json())
     else console.error(`History failed (HTTP ${res.status})`)
   }
+  // shortcut: plain dropdown list of the graph's test cases; the UI revamp restyles the tests panel.
+  const [tests, setTests] = useState<TestCase[] | null>(null) // null = closed
+  const loadTests = useCallback(async () => {
+    const res = await fetch(`/api/graphs/${graphId}/tests`)
+    if (res.ok) setTests(await res.json())
+    else console.error(`Tests failed (HTTP ${res.status})`)
+  }, [graphId])
+  useEffect(() => { // results land when the runs end: poll while any test is pending
+    if (!tests?.some((t) => t.lastResult === 'PENDING')) return
+    const timer = setTimeout(loadTests, 2000)
+    return () => clearTimeout(timer)
+  }, [tests, loadTests])
+  const runTests = async () => {
+    const res = await fetch(`/api/graphs/${graphId}/tests/run`, { method: 'POST' })
+    if (!res.ok) console.error(`Run tests failed (HTTP ${res.status})`)
+    loadTests()
+  }
+  const deleteTest = async (id: string) => {
+    const res = await fetch(`/api/tests/${id}`, { method: 'DELETE' })
+    if (!res.ok) console.error(`Delete test failed (HTTP ${res.status})`)
+    loadTests()
+  }
+
   const replay = (run: RunMetadata) => {
     setHistory(null)
     // Render the cleared state on its own: if this run is already the active one, batching both
@@ -234,9 +257,46 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
             </div>
           )}
         </div>
-        <button className="af-icon-btn" title="Tests">
-          <TestTube size={13} />
-        </button>
+        <div className="relative">
+          <button onClick={() => (tests ? setTests(null) : loadTests())} className="af-icon-btn" title="Tests">
+            <TestTube size={13} />
+          </button>
+          {tests && (
+            <div
+              className="absolute left-0 top-full mt-1 w-[380px] max-h-[320px] overflow-y-auto rounded-lg p-1 font-mono text-[10px]"
+              style={{ background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+            >
+              <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                <span style={{ color: 'var(--text-ghost)' }}>
+                  {tests.length === 0 ? 'No tests yet. Save one from a finished run (trace panel).' : `${tests.length} test${tests.length === 1 ? '' : 's'}`}
+                </span>
+                {tests.length > 0 && (
+                  <button onClick={runTests} className="af-btn af-btn-run" style={{ height: 22 }}>
+                    <Play size={9} className="fill-current" />
+                    Run all
+                  </button>
+                )}
+              </div>
+              {tests.map((t) => (
+                <div key={t.id} className="flex gap-2 items-baseline px-2 py-1.5 rounded-md hover:bg-white/[0.04]">
+                  <span className="w-[56px] flex-shrink-0" style={{ color: t.lastResult === 'PASS' ? '#00E5C3' : t.lastResult === 'FAIL' ? '#FF6B81' : 'var(--text-ghost)' }}>
+                    {t.lastResult ?? '—'}
+                  </span>
+                  <span
+                    className="flex-1 truncate"
+                    style={{ color: 'var(--text-secondary)' }}
+                    title={`path: ${t.expectedPath.join(', ') || 'any'}${t.expectedOutputContains ? ` · output contains "${t.expectedOutputContains}"` : ''}`}
+                  >
+                    {t.name}
+                  </span>
+                  <button onClick={() => deleteTest(t.id)} title="Delete test" className="px-1 hover:text-[#FF6B81]" style={{ color: 'var(--text-ghost)' }}>
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <button onClick={onOpenToolLibrary} className="af-icon-btn" title="Tool Library">
           <ToolsIcon size={13} />
         </button>

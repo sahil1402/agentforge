@@ -27,7 +27,7 @@ interface TracePanelProps {
 }
 
 export default function TracePanel({ runId, onGateApprove, onGateReject }: TracePanelProps) {
-  const { runStatus, nodeStats, nodes, runError } = useGraphStore()
+  const { runStatus, nodeStats, nodes, runError, graphId, completedNodeIds } = useGraphStore()
   const [nodeTraces, setNodeTraces] = useState<Map<string, NodeTrace>>(new Map())
   const [elapsedMs, setElapsedMs] = useState(0)
   const [activeTab, setActiveTab] = useState<'trace' | 'output' | 'logs'>('trace')
@@ -121,6 +121,27 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [nodeTraces.size])
+
+  // shortcut: native prompt for the name; the UI revamp gives tests a form.
+  const saveAsTest = async () => {
+    if (!runId || !graphId) return
+    const name = window.prompt('Name for this test case', `Run ${runId.slice(0, 8)}`)
+    if (!name) return
+    const run = await fetch(`/api/runs/${runId}`).then((r) => r.json())
+    const inputPayload = { ...run.inputPayload }
+    delete inputPayload.autoApprove // the test runner adds it again
+    const res = await fetch(`/api/graphs/${graphId}/tests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        inputPayload,
+        expectedPath: [...completedNodeIds],
+        expectedOutputContains: finalOutput?.trim().split('\n')[0].slice(0, 60) || null,
+      }),
+    })
+    if (!res.ok) console.error(`Save test failed (HTTP ${res.status})`)
+  }
 
   const traces = Array.from(nodeTraces.values())
   const isRunning = runStatus === 'RUNNING' || runStatus === 'AWAITING_HUMAN'
@@ -262,6 +283,11 @@ export default function TracePanel({ runId, onGateApprove, onGateReject }: Trace
               <span className="font-mono text-[9px] text-[var(--text-ghost)]">
                 {runId ? `run_${runId.slice(0, 8)}` : '—'}
               </span>
+              {runStatus === 'COMPLETE' && (
+                <button onClick={saveAsTest} className="font-mono text-[9px] text-[#9B8AFF] hover:underline">
+                  Save as test
+                </button>
+              )}
               {isRunning && (
                 <span className="flex items-center gap-1 font-mono text-[9px] text-[#00E5C3]">
                   <Timer size={9} />
