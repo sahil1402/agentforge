@@ -52,6 +52,7 @@ def node_stats(result: Any, started: float) -> dict[str, int]:
 async def run(job: dict[str, Any], emit: Emit, read_decision: ReadDecision) -> None:
     """Execute the job's graph, emitting trace events; ends with exactly one COMPLETE or ERROR."""
     node_ids: dict[str, str] = job.get("nodeIds", {})
+    auto_approve = bool((job.get("input") or {}).get("autoApprove"))  # test runs: gates approve themselves
     running: dict[str, str] = {}  # task id → graph node id, for blaming errors
     started: dict[str, float] = {}  # task id → monotonic start; a resumed gate keeps its first start
     failed: str | None = None  # node whose task reported the error (parallel branches)
@@ -100,7 +101,7 @@ async def run(job: dict[str, Any], emit: Emit, read_decision: ReadDecision) -> N
                     "prompt": request.get("prompt", ""), "lastOutput": request.get("last_output", ""),
                     "timeoutSeconds": request.get("timeout_seconds"),
                 }})
-                approved = await read_decision(request.get("timeout_seconds"))
+                approved = True if auto_approve else await read_decision(request.get("timeout_seconds"))
                 decision = "timeout" if approved is None else "approve" if approved else "reject"
                 emit({"type": "GATE_RESOLVED", "nodeId": gate_id, "payload": {"decision": decision}})
                 answers[intr.id] = {"approved": bool(approved)}

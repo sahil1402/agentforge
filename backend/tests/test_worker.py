@@ -164,6 +164,12 @@ def test_gate_approve_resumes_the_run() -> None:
     assert (gate_end["inputTokens"], gate_end["outputTokens"]) == (0, 0)  # gates write no AI messages
 
 
+def test_auto_approve_resolves_gates_without_asking() -> None:
+    events = run({**job("support"), "input": {"query": "I want a refund", "autoApprove": True}})  # no decisions queued
+    assert [e["payload"] for e in events if e["type"] == "GATE_RESOLVED"] == [{"decision": "approve"}]
+    assert events[-1]["type"] == "COMPLETE"
+
+
 @pytest.mark.parametrize(("decision", "label"), [(False, "reject"), (None, "timeout")])
 def test_gate_reject_or_timeout_ends_the_run(decision: bool | None, label: str) -> None:
     events = run(job("support", "refund please"), decisions=[decision])
