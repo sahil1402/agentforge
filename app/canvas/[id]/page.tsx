@@ -102,6 +102,9 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
   const runTests = async () => {
     const res = await fetch(`/api/graphs/${graphId}/tests/run`, { method: 'POST' })
     if (!res.ok) console.error(`Run tests failed (HTTP ${res.status})`)
+    else for (const s of (await res.json()).started as Array<{ testId: string; error?: string }>) {
+      if (s.error) console.error(`Test ${s.testId} could not start: ${s.error}`) // e.g. unsupported graph, engine down
+    }
     loadTests()
   }
   const deleteTest = async (id: string) => {

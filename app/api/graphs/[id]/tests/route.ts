@@ -15,13 +15,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const tests = await prisma.testCase.findMany({ where: { graphId }, orderBy: { createdAt: 'asc' } })
   for (const test of tests) {
-    if (test.lastResult !== 'PENDING' || !test.lastRunId) continue
-    const run = await prisma.run.findUnique({
+    if (test.lastResult !== 'PENDING') continue
+    const run = test.lastRunId ? await prisma.run.findUnique({
       where: { id: test.lastRunId },
       select: { status: true, outputPayload: true, events: { where: { eventType: 'NODE_END' }, select: { nodeId: true } } },
-    })
-    if (!run) continue
-    const result = gradeRun(test, run, run.events.flatMap((e) => (e.nodeId ? [e.nodeId] : [])))
+    }) : null
+    // A pending test whose run row is gone can never be graded: fail it rather than poll forever.
+    const result = run ? gradeRun(test, run, run.events.flatMap((e) => (e.nodeId ? [e.nodeId] : []))) : 'FAIL'
     if (result === 'PENDING') continue
     test.lastResult = result
     await prisma.testCase.update({ where: { id: test.id }, data: { lastResult: result } })

@@ -13,6 +13,7 @@ let failed = 0
 for (const graph of await api('/api/graphs')) {
   const { started } = await api(`/api/graphs/${graph.id}/tests/run`, { method: 'POST' })
   if (started.length === 0) continue
+  for (const s of started) if (s.error) console.log(`ERROR\t${graph.name} / ${s.testId}: ${s.error}`)
   let tests
   do {
     await new Promise((resolve) => setTimeout(resolve, 2000))
