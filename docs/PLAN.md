@@ -10,7 +10,7 @@ this file has **what is left, in order, split into tasks**. Tick boxes as tasks 
 | 0 Cleanup · 1 Transpiler · 2 Execution engine | ✅ done, committed |
 | 2.5 Hardening | ✅ agent prompts (one user turn), run input, Claude 5.5 pricing — ⬜ real-model check |
 | 3 Live canvas | ✅ done, committed (3.1–3.5) |
-| 4 Test harness | ⬜ `TestCase` table exists, nothing uses it |
+| 4 Test harness | ✅ done, committed (4.1–4.5) |
 | UI revamp | ⬜ user supplies the UI skills/plugins |
 | 5 Deploy | ⬜ `GraphVersion` snapshots are saved on every PATCH; nothing reads them |
 | 6 Launch | ⬜ |
@@ -73,25 +73,26 @@ this file has **what is left, in order, split into tasks**. Tick boxes as tasks 
 `TestCase`: `name`, `inputPayload`, `expectedPath String[]`, `expectedOutputContains?`,
 `lastResult PASS|FAIL|PENDING`, `lastRunId`.
 
-- [ ] **4.1 Decide the semantics (ask the user if unsure).** Recommended:
+- [x] **4.1 Decide the semantics (ask the user if unsure).** Agreed 2026-11-06 as recommended; gates via the `autoApprove` flag:
   - **Path** = the *set* of visited node ids equals `expectedPath` (parallel branches have no
     fixed order; the set still pins router decisions, which is what path tests are for).
   - **Output** = final output contains `expectedOutputContains` (case-insensitive).
   - **Gates in tests:** auto-approve (add `autoApprove` to the run input the engine reads, or
     resolve from Next when GATE_PENDING arrives). Needs a call.
-- [ ] **4.2 Test CRUD API.** `GET/POST /api/graphs/:id/tests`, `PATCH/DELETE /api/tests/:id`.
+- [x] **4.2 Test CRUD API.** `GET/POST /api/graphs/:id/tests`, `PATCH/DELETE /api/tests/:id`.
   Validate at the boundary (name, input object, path = string[]). Follow the existing route
   style (404 for missing, `res.ok` checks).
-- [ ] **4.3 Run tests.** Extract the run-creation body of `POST /api/runs` into a shared helper
+- [x] **4.3 Run tests.** Extract the run-creation body of `POST /api/runs` into a shared helper
   (transpile → create Run → dispatch) and reuse it. `POST /api/graphs/:id/tests/run` starts one
   run per test and returns run ids. Grading happens when a run is terminal: compute pass/fail
   from the run row + `run_events` (NODE_END node ids, COMPLETE output) and write
   `lastResult`/`lastRunId` (lazily on `GET .../tests`, so no engine callback is needed).
   *Check:* a Jest/API test with a fake-model engine run: one passing, one failing on path.
-- [ ] **4.4 Tests panel (minimal UI).** TestTube button → list with last result, Run all, delete.
+  (Done as a Jest unit test of `gradeRun`; the end-to-end variant needs DB + engine, run it by hand.)
+- [x] **4.4 Tests panel (minimal UI).** TestTube button → list with last result, Run all, delete.
   **"Save run as test"** from the trace panel (prefills input, visited path, an output snippet) is
   the cheap way to create tests. Minimal styling — revamp redoes it.
-- [ ] **4.5 CI.** `.github/workflows/ci.yml`: `npm ci`, `tsc`, `eslint`, `jest`, and backend
+- [x] **4.5 CI.** `.github/workflows/ci.yml`: `npm ci`, `tsc`, `eslint`, `jest`, and backend
   `pytest` (fake models, no keys, no DB). Graph regression tests need DB + engine + keys — add a
   `npm run test:graphs` script that calls the tests API and exits non-zero on FAIL; wire it into CI
   only behind a secret, documented as optional.

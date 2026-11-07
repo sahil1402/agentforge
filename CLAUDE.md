@@ -50,6 +50,24 @@ repo's `.env.local`). Next owns runs; the engine owns run **status and events** 
   Jest test — regenerate with `UPDATE_FIXTURES=1 npx jest transpile`.
 - Not yet verified against real provider APIs (no keys in `.env.local`).
 
+## Test harness (Phase 4 — complete)
+
+- `TestCase` = `{ name, inputPayload, expectedPath: string[], expectedOutputContains?: string }`.
+  **Semantics (agreed 2026-11-06):** path = the *set* of node ids with a NODE_END equals `expectedPath`
+  (empty = not checked); output = COMPLETE's output contains the text, case-insensitive (null = not
+  checked); a FAILED run fails the test. Gates auto-approve: the run input carries `autoApprove: true`,
+  which the worker honours (GATE_PENDING/GATE_RESOLVED are still emitted).
+- `GET/POST /api/graphs/:id/tests`, `PATCH/DELETE /api/tests/:id` — CRUD, validated by `parseTestCase`
+  in `lib/test-cases.ts`. `POST /api/graphs/:id/tests/run` starts one run per test through
+  `lib/start-run.ts` (shared with `POST /api/runs`) and sets `lastResult = PENDING`; `GET …/tests`
+  grades pending tests whose run has ended (`gradeRun`, unit-tested in Jest) and stores `lastResult`.
+- UI: the TestTube button lists tests (Run all, delete); "Save as test" in the trace panel after a
+  COMPLETE run prefills the input, the visited path and the first output line (output assertions are
+  brittle with real models — clear the text via PATCH if a test flaps). Minimal until the revamp.
+- CI: `.github/workflows/ci.yml` runs tsc/eslint/jest and pytest (fake models, no DB). `npm run
+  test:graphs` (`scripts/test-graphs.mjs`) runs every graph's tests against a live `AGENTFORGE_URL` and
+  exits non-zero on a FAIL; CI runs it only when that secret is set.
+
 ## Transpiler (Week 3 — complete)
 
 Graph → LangGraph Python **as a string** (`POST /api/graphs/:id/transpile` →
