@@ -26,6 +26,13 @@ def pool() -> asyncpg.Pool:
 
 
 async def fail_active_runs(reason: str) -> None:
+    """Runs a crashed engine left active: end each event stream with an ERROR, then mark them FAILED."""
+    orphans = await pool().fetch(
+        "SELECT id, (SELECT COALESCE(MAX(sequence), 0) FROM run_events WHERE run_id = runs.id) AS last_seq"
+        " FROM runs WHERE status IN ('RUNNING', 'AWAITING_HUMAN')"
+    )
+    for run in orphans:
+        await add_event(run["id"], run["last_seq"] + 1, "ERROR", None, {"message": reason}, now())
     await pool().execute(
         "UPDATE runs SET status = 'FAILED', error_message = $1 WHERE status IN ('RUNNING', 'AWAITING_HUMAN')",
         reason,

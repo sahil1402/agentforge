@@ -42,7 +42,7 @@ repo's `.env.local`). Next owns runs; the engine owns run **status and events** 
 - `POST /api/runs/:id/gate` (Next) only forwards; the engine records GATE_RESOLVED.
   `POST /api/runs/:id/cancel` (toolbar Stop) → engine kills the worker → ERROR "Cancelled by user".
 - Engine shutdown stops all runs (FAILED "Execution engine stopped"); startup marks leftover
-  RUNNING/AWAITING_HUMAN runs FAILED.
+  RUNNING/AWAITING_HUMAN runs FAILED (and appends an ERROR event so their streams end).
 - **Shortcut:** runs execute with the engine's privileges and env (API keys) — sandbox before any
   hosted/multi-user use. An engine restart loses in-flight runs (gates use `InMemorySaver`).
 - Tests: `backend/tests` (pytest, `FakeChat` in `tests/fakes.py`; API tests spawn real workers via
