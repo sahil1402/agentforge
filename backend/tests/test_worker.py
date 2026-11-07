@@ -165,9 +165,12 @@ def test_gate_approve_resumes_the_run() -> None:
 
 
 def test_auto_approve_resolves_gates_without_asking() -> None:
-    events = run({**job("support"), "input": {"query": "I want a refund", "autoApprove": True}})  # no decisions queued
+    # No `query` key: the request text falls back to the JSON payload, which must not carry the flag.
+    events = run({**job("support"), "input": {"topic": "I want a refund", "autoApprove": True}})  # no decisions queued
     assert [e["payload"] for e in events if e["type"] == "GATE_RESOLVED"] == [{"decision": "approve"}]
     assert events[-1]["type"] == "COMPLETE"
+    _, prompt = fakes.CALLS[-1]
+    assert "refund" in prompt[1].content and "autoApprove" not in prompt[1].content
 
 
 @pytest.mark.parametrize(("decision", "label"), [(False, "reject"), (None, "timeout")])
