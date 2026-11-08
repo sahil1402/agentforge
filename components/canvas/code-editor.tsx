@@ -9,93 +9,41 @@ import { EditorView } from '@codemirror/view'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 
-// ─── Mission Control theme ────────────────────────────────────────────────────
+// ─── Theme: every color is a CSS token, so the editor follows light/dark ──────
 
-const missionControlTheme = EditorView.theme(
-  {
-    '&': {
-      fontSize: '11.5px',
-      fontFamily: 'JetBrains Mono, monospace',
-      color: 'var(--text-secondary)',
-      backgroundColor: 'var(--surface-0)',
-      borderRadius: '8px',
-      border: '1px solid var(--border-subtle)',
-      overflow: 'hidden',
-      transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
-    },
-    '&.cm-focused': {
-      outline: 'none',
-      borderColor: 'rgba(155, 138, 255, 0.4)',
-      boxShadow: '0 0 0 1px rgba(155, 138, 255, 0.1)',
-    },
-    '.cm-content': {
-      padding: '10px 12px',
-      caretColor: '#9B8AFF',
-      lineHeight: '1.55',
-    },
-    '.cm-cursor, .cm-dropCursor': {
-      borderLeftColor: '#9B8AFF',
-      borderLeftWidth: '2px',
-    },
-    '.cm-line': { padding: '0' },
-    '.cm-gutters': { display: 'none' },
-    '.cm-activeLine': { backgroundColor: 'transparent' },
-    '.cm-scroller': { fontFamily: 'JetBrains Mono, monospace !important' },
-    '.cm-placeholder': {
-      color: 'var(--text-ghost)',
-      fontStyle: 'normal',
-    },
-    '&.cm-editor ::selection': {
-      backgroundColor: 'rgba(155, 138, 255, 0.25)',
-    },
-    '.cm-selectionBackground, ::selection': {
-      backgroundColor: 'rgba(155, 138, 255, 0.25) !important',
-    },
+const afTheme = EditorView.theme({
+  '&': {
+    fontSize: '12px',
+    fontFamily: 'var(--font-mono)',
+    color: 'var(--text)',
+    backgroundColor: 'var(--surface-2)',
+    borderRadius: '6px',
+    border: '1px solid var(--line)',
+    overflow: 'hidden',
   },
-  { dark: true }
-)
+  '&.cm-focused': { outline: 'none', borderColor: 'var(--accent)' },
+  '.cm-content': { padding: '8px 10px', caretColor: 'var(--accent)', lineHeight: '1.55' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
+  '.cm-line': { padding: '0' },
+  '.cm-gutters': { backgroundColor: 'var(--surface-2)', color: 'var(--text-3)', border: 'none', borderRight: '1px solid var(--line)' },
+  '.cm-activeLine': { backgroundColor: 'transparent' },
+  '.cm-scroller': { fontFamily: 'var(--font-mono) !important' },
+  '.cm-placeholder': { color: 'var(--text-3)', fontStyle: 'normal' },
+  '&.cm-editor ::selection, .cm-selectionBackground': { backgroundColor: 'var(--accent-soft) !important' },
+})
 
-// ─── Syntax highlight — covers markdown, python, json ─────────────────────────
-
-const missionControlHighlight = HighlightStyle.define([
-  // Markdown
-  { tag: tags.heading1,                color: '#9B8AFF', fontWeight: '700' },
-  { tag: tags.heading2,                color: '#9B8AFF', fontWeight: '600' },
-  { tag: [tags.heading3, tags.heading4, tags.heading5, tags.heading6],
-                                       color: '#C4B8FF', fontWeight: '600' },
-  { tag: tags.strong,                  color: '#EEF0F6', fontWeight: '700' },
-  { tag: tags.emphasis,                color: '#EEF0F6', fontStyle: 'italic' },
-  { tag: tags.monospace,               color: '#00E5C3' },
-  { tag: tags.link,                    color: '#5CA4FF', textDecoration: 'underline' },
-  { tag: tags.url,                     color: '#5CA4FF' },
-  { tag: tags.list,                    color: '#FFB547' },
-  { tag: tags.quote,                   color: '#8B92A8', fontStyle: 'italic' },
-  // Python / general code
-  { tag: tags.keyword,                 color: '#9B8AFF' },
-  { tag: tags.controlKeyword,          color: '#9B8AFF', fontWeight: '600' },
-  { tag: tags.definitionKeyword,       color: '#9B8AFF', fontWeight: '600' },
-  { tag: tags.function(tags.variableName), color: '#5CA4FF' },
-  { tag: tags.function(tags.definition(tags.variableName)),
-                                       color: '#5CA4FF', fontWeight: '600' },
-  { tag: tags.className,               color: '#FFB547' },
-  { tag: tags.typeName,                color: '#FFB547' },
-  { tag: tags.number,                  color: '#FFB547' },
-  { tag: tags.bool,                    color: '#FF6B81' },
-  { tag: tags.null,                    color: '#FF6B81' },
-  { tag: tags.string,                  color: '#00E5C3' },
-  { tag: tags.special(tags.string),    color: '#00E5C3' },
-  { tag: tags.comment,                 color: '#4A5068', fontStyle: 'italic' },
-  { tag: tags.lineComment,             color: '#4A5068', fontStyle: 'italic' },
-  { tag: tags.blockComment,            color: '#4A5068', fontStyle: 'italic' },
-  { tag: tags.operator,                color: '#8B92A8' },
-  { tag: tags.punctuation,             color: '#8B92A8' },
-  { tag: tags.bracket,                 color: '#8B92A8' },
-  // JSON
-  { tag: tags.propertyName,            color: '#9B8AFF' },
-  // Markdown meta (the # * ` markers)
-  { tag: tags.meta,                    color: '#4A5068' },
-  { tag: tags.processingInstruction,   color: '#4A5068' },
-  { tag: tags.atom,                    color: '#FFB547' },
+const afHighlight = HighlightStyle.define([
+  { tag: [tags.heading1, tags.heading2, tags.heading3, tags.heading4, tags.heading5, tags.heading6], color: 'var(--t-agent)', fontWeight: '600' },
+  { tag: [tags.strong], fontWeight: '700' },
+  { tag: [tags.emphasis], fontStyle: 'italic' },
+  { tag: [tags.monospace, tags.string, tags.special(tags.string)], color: 'var(--t-tool)' },
+  { tag: [tags.link, tags.url], color: 'var(--accent)' },
+  { tag: [tags.list, tags.number, tags.atom, tags.className, tags.typeName], color: 'var(--t-router)' },
+  { tag: [tags.keyword, tags.controlKeyword, tags.definitionKeyword, tags.propertyName], color: 'var(--t-memory)' },
+  { tag: [tags.function(tags.variableName), tags.function(tags.definition(tags.variableName))], color: 'var(--accent)' },
+  { tag: [tags.bool, tags.null], color: 'var(--t-gate)' },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.meta, tags.processingInstruction, tags.quote], color: 'var(--text-3)', fontStyle: 'italic' },
+  { tag: [tags.operator, tags.punctuation, tags.bracket], color: 'var(--text-2)' },
 ])
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -110,6 +58,7 @@ export function CodeEditor({
   maxHeight = '300px',
   language = 'markdown',
   readOnly = false,
+  lineNumbers = false,
 }: {
   value: string
   onChange: (v: string) => void
@@ -118,16 +67,17 @@ export function CodeEditor({
   maxHeight?: string
   language?: CodeEditorLanguage
   readOnly?: boolean
+  lineNumbers?: boolean
 }) {
   const extensions = useMemo(() => {
     const ext = []
     if (language === 'markdown') ext.push(markdown())
     else if (language === 'python') ext.push(python())
     else if (language === 'json') ext.push(json())
-    ext.push(EditorView.lineWrapping)
-    ext.push(syntaxHighlighting(missionControlHighlight))
+    if (!lineNumbers) ext.push(EditorView.lineWrapping)
+    ext.push(syntaxHighlighting(afHighlight))
     return ext
-  }, [language])
+  }, [language, lineNumbers])
 
   return (
     <CodeMirror
@@ -135,10 +85,10 @@ export function CodeEditor({
       onChange={onChange}
       placeholder={placeholder}
       extensions={extensions}
-      theme={missionControlTheme}
+      theme={afTheme}
       editable={!readOnly}
       basicSetup={{
-        lineNumbers: false,
+        lineNumbers,
         foldGutter: false,
         highlightActiveLine: false,
         highlightActiveLineGutter: false,
@@ -148,12 +98,9 @@ export function CodeEditor({
         closeBrackets: language === 'python' || language === 'json',
         indentOnInput: language === 'python' || language === 'json',
       }}
-      style={{
-        minHeight,
-        maxHeight,
-        overflow: 'hidden',
-        fontSize: '11.5px',
-      }}
+      // The library applies these to the editor, so long content scrolls inside it.
+      minHeight={minHeight}
+      maxHeight={maxHeight === 'none' ? undefined : maxHeight}
     />
   )
 }
