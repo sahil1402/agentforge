@@ -1,716 +1,256 @@
 'use client'
 
-import { useCallback, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import {
-  X, Trash2, Copy, Cpu, Database, Sparkles,
-  Plus, DollarSign, Wrench, Check,
-} from 'lucide-react'
+import { useCallback, type CSSProperties } from 'react'
+import { X, Trash2, Copy, Plus, Wrench } from 'lucide-react'
 import { useGraphStore, selectSelectedNode } from '@/store/graph-store'
-import { NODE_COLORS, NODE_LABELS, AVAILABLE_MODELS, MODEL_PRICING, type NodeType } from '@/lib/types'
+import { NODE_HUE, AVAILABLE_MODELS, MODEL_PRICING, costUsd, type NodeType } from '@/lib/types'
 import type { AgentNodeData, ToolNodeData, MemoryNodeData, RouterNodeData, HumanGateNodeData } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { CodeEditor, approxTokenCount } from './code-editor'
 import { useTools } from '@/lib/use-tools'
 
-// Tool registry uses the shared `useTools` hook from `lib/use-tools`.
+// ─── Field primitives ────────────────────────────────────────────────────────
 
-// ─── Reusable form components with premium styling ───────────────────────────
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
+function Prop({ label, aside, htmlFor, children }: { label: string; aside?: React.ReactNode; htmlFor?: string; children: React.ReactNode }) {
   return (
-    <label className="block font-mono text-[9px] font-semibold tracking-[0.12em] uppercase text-[var(--text-ghost)] mb-1.5">
+    <div className="af-prop">
+      <label htmlFor={htmlFor}>{label}{aside && <span className="af-val" style={{ minWidth: 0 }}>{aside}</span>}</label>
       {children}
-    </label>
+    </div>
   )
 }
 
-function TextInput({
-  value, onChange, placeholder, className,
-}: {
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-  className?: string
-}) {
-  return (
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className={cn(
-        'w-full h-9 px-3 rounded-lg text-[12px] font-medium',
-        'bg-[var(--surface-0)] border border-[var(--border-subtle)] text-[var(--text-primary)]',
-        'placeholder:text-[var(--text-ghost)] outline-none',
-        'focus:border-[#9B8AFF]/40 focus:ring-1 focus:ring-[#9B8AFF]/10 transition-all',
-        className
-      )}
-    />
-  )
+const Sect = ({ children }: { children: React.ReactNode }) => <div className="af-sect">{children}</div>
+
+function Text({ id, value, onChange, placeholder, mono }: { id: string; value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean }) {
+  return <input id={id} className={cn('af-in', mono && 'af-mono')} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
 }
 
-function TextArea({
-  value, onChange, rows = 4, placeholder,
-}: {
-  value: string
-  onChange: (v: string) => void
-  rows?: number
-  placeholder?: string
-}) {
-  return (
-    <textarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      rows={rows}
-      placeholder={placeholder}
-      className={cn(
-        'w-full px-3 py-2.5 rounded-lg text-[11.5px] font-mono',
-        'bg-[var(--surface-0)] border border-[var(--border-subtle)] text-[var(--text-secondary)]',
-        'placeholder:text-[var(--text-ghost)] outline-none resize-none leading-relaxed',
-        'focus:border-[#9B8AFF]/40 focus:ring-1 focus:ring-[#9B8AFF]/10 transition-all',
-      )}
-    />
-  )
+function Area({ id, value, onChange, placeholder, mono, rows = 4 }: { id: string; value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean; rows?: number }) {
+  return <textarea id={id} className={cn('af-in', mono && 'af-mono')} rows={rows} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
 }
 
-function Select({
-  value, onChange, options,
-}: {
+function Select({ id, value, onChange, options }: {
+  id: string
   value: string
   onChange: (v: string) => void
   options: Array<{ value: string; label: string; group?: string }>
 }) {
-  // Build groups in insertion order so we preserve the AVAILABLE_MODELS ordering
-  const groups: Array<{ name: string | null; items: typeof options }> = []
-  for (const o of options) {
-    const name = o.group ?? null
-    const last = groups[groups.length - 1]
-    if (last && last.name === name) {
-      last.items.push(o)
-    } else {
-      groups.push({ name, items: [o] })
-    }
-  }
-  const hasGroups = groups.some((g) => g.name !== null)
-
+  const groups = [...new Set(options.map((o) => o.group ?? ''))]
+  const opt = (o: { value: string; label: string }) => <option key={o.value} value={o.value}>{o.label}</option>
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        'w-full h-9 px-3 rounded-lg text-[12px]',
-        'bg-[var(--surface-0)] border border-[var(--border-subtle)] text-[var(--text-primary)]',
-        'outline-none cursor-pointer appearance-none',
-        'focus:border-[#9B8AFF]/40 focus:ring-1 focus:ring-[#9B8AFF]/10 transition-all',
-        'bg-no-repeat bg-[right_0.75rem_center] bg-[length:10px]',
-      )}
-      style={{
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234A5068' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`,
-      }}
-    >
-      {hasGroups
-        ? groups.map((g, i) =>
-            g.name ? (
-              <optgroup key={`${g.name}-${i}`} label={g.name}>
-                {g.items.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </optgroup>
-            ) : (
-              g.items.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))
-            )
-          )
-        : options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
+    <select id={id} className="af-in" value={value} onChange={(e) => onChange(e.target.value)}>
+      {groups.length > 1 || groups[0]
+        ? groups.map((g) => <optgroup key={g} label={g}>{options.filter((o) => (o.group ?? '') === g).map(opt)}</optgroup>)
+        : options.map(opt)}
     </select>
   )
 }
 
-function SliderField({
-  label, value, onChange, min, max, step = 0.01, display, color = '#9B8AFF',
-}: {
-  label: string
-  value: number
-  onChange: (v: number) => void
-  min: number
-  max: number
-  step?: number
-  display?: string
-  color?: string
-}) {
-  const pct = ((value - min) / (max - min)) * 100
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <FieldLabel>{label}</FieldLabel>
-        <span className="font-mono text-[10px] font-semibold" style={{ color }}>
-          {display ?? value.toFixed(2)}
-        </span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full h-1 rounded-full appearance-none cursor-pointer"
-        style={{
-          background: `linear-gradient(to right, ${color} ${pct}%, var(--surface-3) ${pct}%)`,
-        }}
-      />
-    </div>
-  )
-}
-
-function ToggleField({
-  label, hint, checked, onChange, color = '#9B8AFF',
-}: {
-  label: string
-  hint?: string
-  checked: boolean
-  onChange: (v: boolean) => void
-  color?: string
+function Slider({ id, label, value, onChange, min, max, step, display }: {
+  id: string; label: string; value: number; onChange: (v: number) => void; min: number; max: number; step: number; display: string
 }) {
   return (
-    <button
-      onClick={() => onChange(!checked)}
-      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[var(--surface-0)] border border-[var(--border-subtle)] hover:border-[var(--border-hover)] transition-all text-left"
-    >
-      <div
-        className="w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-all"
-        style={{
-          background: checked ? color : 'transparent',
-          border: `1px solid ${checked ? color : 'var(--border-default)'}`,
-          boxShadow: checked ? `0 0 8px ${color}40` : 'none',
-        }}
-      >
-        {checked && <Check size={10} className="text-white" strokeWidth={3} />}
+    <Prop label={label} htmlFor={id}>
+      <div className="ctl">
+        <input id={id} type="range" className="af-range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+        <span className="af-val">{display}</span>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11.5px] font-medium text-[var(--text-primary)] leading-tight">{label}</p>
-        {hint && <p className="text-[9.5px] text-[var(--text-ghost)] mt-0.5 leading-tight">{hint}</p>}
-      </div>
-    </button>
+    </Prop>
   )
 }
 
-function PanelSection({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="px-4 py-3.5 border-b border-[var(--border-subtle)]">
-      <div className="flex items-center gap-1.5 mb-3">
-        {icon && <span className="text-[var(--text-ghost)]">{icon}</span>}
-        <p className="font-mono text-[9px] font-semibold tracking-[0.12em] uppercase text-[var(--text-ghost)]">
-          {title}
-        </p>
-      </div>
-      <div className="space-y-3">{children}</div>
-    </div>
-  )
+function useUpdate<T>(id: string) {
+  const updateNodeData = useGraphStore((s) => s.updateNodeData)
+  return useCallback((partial: Partial<T>) => updateNodeData(id, partial), [id, updateNodeData])
 }
 
-// ─── Tool multi-select picker ─────────────────────────────────────────────────
-
-function ToolMultiSelect({
-  selected,
-  onChange,
-}: {
-  selected: string[]
-  onChange: (next: string[]) => void
-}) {
-  const { tools, loading } = useTools()
-  const [open, setOpen] = useState(false)
-
-  const toggle = (name: string) => {
-    if (selected.includes(name)) {
-      onChange(selected.filter((t) => t !== name))
-    } else {
-      onChange([...selected, name])
-    }
-  }
-
-  const assigned = tools.filter((t) => selected.includes(t.name))
-  const available = tools.filter((t) => !selected.includes(t.name))
-
-  // Tools selected but not in registry (e.g. deleted) — render as ghost chips
-  const orphaned = selected.filter((name) => !tools.some((t) => t.name === name))
-
-  return (
-    <div className="space-y-2">
-      {/* Assigned chips */}
-      <div className="flex flex-wrap gap-1.5 min-h-[28px]">
-        {assigned.length === 0 && orphaned.length === 0 ? (
-          <span className="text-[11px] text-[var(--text-ghost)] italic">No tools assigned</span>
-        ) : (
-          <>
-            {assigned.map((t) => (
-              <span
-                key={t.id}
-                title={t.description}
-                className="font-mono text-[9px] px-2 py-[3px] rounded-md bg-[var(--surface-3)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center gap-1.5"
-              >
-                <Wrench size={9} className="text-[#5CA4FF]" />
-                {t.name}
-                <button
-                  onClick={() => toggle(t.name)}
-                  className="text-[var(--text-ghost)] hover:text-[#FF6B81] transition-colors leading-none"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            {orphaned.map((name) => (
-              <span
-                key={name}
-                title="Not in tool registry"
-                className="font-mono text-[9px] px-2 py-[3px] rounded-md bg-[#FF6B81]/8 text-[#FF6B81]/80 border border-[#FF6B81]/20 flex items-center gap-1.5"
-              >
-                {name}
-                <button
-                  onClick={() => toggle(name)}
-                  className="hover:text-[#FF6B81] transition-colors leading-none"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </>
-        )}
-      </div>
-
-      {/* Add tool button + dropdown */}
-      <div className="relative">
-        <button
-          onClick={() => setOpen(!open)}
-          disabled={loading}
-          className="w-full h-8 px-2.5 rounded-lg text-[11px] font-medium text-[#9B8AFF] hover:text-[#C4B8FF] border border-dashed border-[var(--border-subtle)] hover:border-[#9B8AFF]/30 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-        >
-          <Plus size={11} />
-          {loading ? 'Loading tools…' : 'Add tool'}
-        </button>
-
-        {open && (
-          <>
-            {/* Click-outside catcher */}
-            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-            <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-[var(--surface-1)] border border-[var(--border-subtle)] rounded-lg shadow-2xl max-h-[260px] overflow-y-auto">
-              {available.length === 0 ? (
-                <div className="px-3 py-2.5 text-[11px] text-[var(--text-ghost)] italic">
-                  All tools assigned
-                </div>
-              ) : (
-                available.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => { toggle(t.name); setOpen(false) }}
-                    className="w-full px-3 py-2 text-left hover:bg-white/[0.04] border-b border-[var(--border-subtle)] last:border-0 transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="font-mono text-[11px] font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
-                        <Wrench size={10} className="text-[#5CA4FF]" />
-                        {t.name}
-                      </span>
-                      <span className="font-mono text-[8px] text-[var(--text-ghost)] uppercase tracking-wider">
-                        {t.category}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-[var(--text-ghost)] line-clamp-2 leading-snug">
-                      {t.description}
-                    </p>
-                  </button>
-                ))
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Node-type configs ───────────────────────────────────────────────────────
+// ─── Per-type forms ──────────────────────────────────────────────────────────
 
 function AgentConfig({ id, data }: { id: string; data: AgentNodeData }) {
-  const { updateNodeData } = useGraphStore()
-  const upd = useCallback(
-    (partial: Partial<AgentNodeData>) => updateNodeData(id, partial),
-    [id, updateNodeData]
-  )
-
-  const modelOptions = AVAILABLE_MODELS.map((m) => ({
-    value: m.value,
-    label: m.label,
-    group: m.provider,
-  }))
-
-  const pricing = MODEL_PRICING[data.model]
-
+  const upd = useUpdate<AgentNodeData>(id)
+  const { tools, loading } = useTools()
+  const price = MODEL_PRICING[data.model]
+  const orphaned = data.tools.filter((name) => !tools.some((t) => t.name === name))
+  const toggle = (name: string) => upd({ tools: data.tools.includes(name) ? data.tools.filter((t) => t !== name) : [...data.tools, name] })
   return (
     <>
-      <PanelSection title="Model" icon={<Cpu size={10} />}>
-        <div>
-          <FieldLabel>Model</FieldLabel>
-          <Select value={data.model} onChange={(v) => upd({ model: v })} options={modelOptions} />
-        </div>
-        <SliderField
-          label="Temperature"
-          value={data.temperature}
-          onChange={(v) => upd({ temperature: v })}
-          min={0} max={2} step={0.01}
-          color="#9B8AFF"
+      <Sect>Model</Sect>
+      <Prop label="Model" htmlFor={`${id}-model`} aside={price && `$${price.input} / $${price.output} per 1M`}>
+        <Select
+          id={`${id}-model`}
+          value={data.model}
+          onChange={(v) => upd({ model: v })}
+          options={AVAILABLE_MODELS.map((m) => ({ value: m.value, label: m.label, group: m.provider }))}
         />
-        <SliderField
-          label="Max Tokens"
-          value={data.maxTokens}
-          onChange={(v) => upd({ maxTokens: v })}
-          min={64} max={8192} step={64}
-          display={data.maxTokens.toString()}
-          color="#5CA4FF"
-        />
+      </Prop>
+      <Slider id={`${id}-temp`} label="Temperature" value={data.temperature} onChange={(v) => upd({ temperature: v })} min={0} max={2} step={0.05} display={data.temperature.toFixed(2)} />
+      <Slider id={`${id}-max`} label="Max tokens" value={data.maxTokens} onChange={(v) => upd({ maxTokens: v })} min={64} max={8192} step={64} display={data.maxTokens.toLocaleString()} />
 
-        {/* Cost estimate badge */}
-        {pricing && (
-          <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-[var(--surface-0)] border border-[var(--border-subtle)]">
-            <DollarSign size={11} className="text-[#00E5C3] flex-shrink-0" />
-            <span className="font-mono text-[10px] text-[var(--text-secondary)]">
-              ${pricing.input.toFixed(2)} in
-              <span className="text-[var(--text-ghost)] mx-1">·</span>
-              ${pricing.output.toFixed(2)} out
-            </span>
-            <span className="font-mono text-[9px] text-[var(--text-ghost)] tracking-wider ml-auto">
-              / 1M TOK
-            </span>
-          </div>
-        )}
-      </PanelSection>
+      <Sect>System prompt</Sect>
+      <CodeEditor value={data.systemPrompt} onChange={(v) => upd({ systemPrompt: v })} placeholder="You are a helpful assistant…" minHeight="120px" maxHeight="320px" language="markdown" />
+      <p className="af-hint" style={{ marginTop: 6 }}>≈ {approxTokenCount(data.systemPrompt).toLocaleString()} tokens · markdown supported</p>
 
-      <PanelSection title="System Prompt" icon={<Sparkles size={10} />}>
-        <CodeEditor
-          value={data.systemPrompt}
-          onChange={(v) => upd({ systemPrompt: v })}
-          placeholder="You are a helpful assistant..."
-          minHeight="100px"
-          maxHeight="280px"
-          language="markdown"
-        />
-        <div className="flex items-center justify-between gap-2 text-[9px] font-mono text-[var(--text-ghost)] mt-1.5 px-0.5">
-          <span title="Markdown supported · headings, **bold**, *italic*, `code`, [links](url)">
-            MD
-          </span>
-          <span title="Approximate — actual count varies by tokenizer">
-            ~{approxTokenCount(data.systemPrompt).toLocaleString()} tokens
-          </span>
-        </div>
-      </PanelSection>
-
-      <PanelSection title="Tools" icon={<Wrench size={10} />}>
-        <ToolMultiSelect
-          selected={data.tools}
-          onChange={(next) => upd({ tools: next })}
-        />
-      </PanelSection>
+      <Sect>Tools <span style={{ fontWeight: 400 }}>· from the registry</span></Sect>
+      <div className="af-tags">
+        {loading && <span className="af-hint">Loading tools…</span>}
+        {tools.map((t) => (
+          <button key={t.id} className={cn('af-tag', data.tools.includes(t.name) && 'on')} title={t.description} aria-pressed={data.tools.includes(t.name)} onClick={() => toggle(t.name)}>
+            <Wrench size={11} />{t.name}
+          </button>
+        ))}
+        {orphaned.map((name) => (
+          <button key={name} className="af-tag orphan" title="Not in the tool registry: click to remove" onClick={() => toggle(name)}>{name} ×</button>
+        ))}
+      </div>
+      <p className="af-hint" style={{ marginTop: 6 }}>Tool nodes wired to this agent are added too. Only the agent&apos;s final answer enters shared state.</p>
     </>
   )
 }
 
 function ToolConfig({ id, data }: { id: string; data: ToolNodeData }) {
-  const { updateNodeData } = useGraphStore()
-  const upd = useCallback(
-    (partial: Partial<ToolNodeData>) => updateNodeData(id, partial),
-    [id, updateNodeData]
-  )
+  const upd = useUpdate<ToolNodeData>(id)
   const { tools } = useTools()
-  const toolOptions = [
-    ...(tools.some((t) => t.name === data.functionName)
-      ? []
-      : [{ value: data.functionName, label: `${data.functionName || '—'} (not in registry)` }]),
+  const options = [
+    ...(tools.some((t) => t.name === data.functionName) ? [] : [{ value: data.functionName, label: `${data.functionName || '—'} (not in registry)` }]),
     ...tools.map((t) => ({ value: t.name, label: t.name })),
   ]
   return (
     <>
-      <PanelSection title="Function">
-        <div>
-          <FieldLabel>Registry Tool</FieldLabel>
-          <Select value={data.functionName} onChange={(v) => upd({ functionName: v })} options={toolOptions} />
-          <p className="text-[10px] text-[var(--text-ghost)] mt-1.5">Connect this node to an agent to let that agent call the tool.</p>
-        </div>
-        <div>
-          <FieldLabel>Description</FieldLabel>
-          <TextArea value={data.description} onChange={(v) => upd({ description: v })} rows={3} placeholder="What does this tool do..." />
-        </div>
-      </PanelSection>
-      <PanelSection title="Return Type">
-        <Select
-          value={data.returnType}
-          onChange={(v) => upd({ returnType: v })}
-          options={[
-            { value: 'string', label: 'string' },
-            { value: 'dict', label: 'dict' },
-            { value: 'list', label: 'list' },
-            { value: 'Any', label: 'Any' },
-          ]}
-        />
-      </PanelSection>
+      <Sect>Function</Sect>
+      <Prop label="Registry tool" htmlFor={`${id}-fn`}>
+        <Select id={`${id}-fn`} value={data.functionName} onChange={(v) => upd({ functionName: v })} options={options} />
+      </Prop>
+      <Prop label="Description" htmlFor={`${id}-desc`}>
+        <Area id={`${id}-desc`} value={data.description} onChange={(v) => upd({ description: v })} rows={3} placeholder="What does this tool do…" />
+      </Prop>
+      <Prop label="Return type" htmlFor={`${id}-ret`}>
+        <Select id={`${id}-ret`} value={data.returnType} onChange={(v) => upd({ returnType: v })} options={['string', 'dict', 'list', 'Any'].map((v) => ({ value: v, label: v }))} />
+      </Prop>
+      <p className="af-hint">Connect this node to an agent to let that agent call the tool.</p>
     </>
   )
 }
 
 function MemoryConfig({ id, data }: { id: string; data: MemoryNodeData }) {
-  const { updateNodeData } = useGraphStore()
-  const upd = useCallback(
-    (partial: Partial<MemoryNodeData>) => updateNodeData(id, partial),
-    [id, updateNodeData]
-  )
+  const upd = useUpdate<MemoryNodeData>(id)
   return (
     <>
-      <PanelSection title="Backend" icon={<Database size={10} />}>
-        <div>
-          <FieldLabel>Backend</FieldLabel>
-          <Select
-            value={data.backend}
-            onChange={(v) => upd({ backend: v as MemoryNodeData['backend'] })}
-            options={[
-              { value: 'qdrant',          label: 'Qdrant' },
-              { value: 'postgres_vector', label: 'PostgreSQL pgvector' },
-              { value: 'in_memory',       label: 'In-memory (dev)' },
-            ]}
-          />
-        </div>
-        <div>
-          <FieldLabel>Collection Name</FieldLabel>
-          <TextInput value={data.collectionName} onChange={(v) => upd({ collectionName: v })} placeholder="my_collection" />
-        </div>
-        <div>
-          <FieldLabel>Embedding Model</FieldLabel>
-          <Select
-            value={data.embeddingModel}
-            onChange={(v) => upd({ embeddingModel: v })}
-            options={[
-              { value: 'text-embedding-3-small', label: 'OpenAI · text-embedding-3-small' },
-              { value: 'text-embedding-3-large', label: 'OpenAI · text-embedding-3-large' },
-              { value: 'text-embedding-ada-002', label: 'OpenAI · ada-002 (legacy)' },
-              { value: 'voyage-3',               label: 'Voyage · v3' },
-              { value: 'mistral-embed',          label: 'Mistral · mistral-embed' },
-              { value: 'bge-large-en-v1.5',      label: 'BAAI · bge-large-en-v1.5' },
-            ]}
-          />
-        </div>
-      </PanelSection>
-      <PanelSection title="Retrieval">
-        <SliderField
-          label="Top-K results"
-          value={data.topK}
-          onChange={(v) => upd({ topK: v })}
-          min={1} max={20} step={1}
-          display={data.topK.toString()}
-          color="#00E5C3"
+      <Sect>Backend</Sect>
+      <Prop label="Backend" htmlFor={`${id}-backend`}>
+        <Select
+          id={`${id}-backend`}
+          value={data.backend}
+          onChange={(v) => upd({ backend: v as MemoryNodeData['backend'] })}
+          options={[{ value: 'qdrant', label: 'Qdrant' }, { value: 'postgres_vector', label: 'PostgreSQL pgvector' }, { value: 'in_memory', label: 'In-memory (dev)' }]}
         />
-      </PanelSection>
+      </Prop>
+      <Prop label="Collection" htmlFor={`${id}-coll`}>
+        <Text id={`${id}-coll`} value={data.collectionName} onChange={(v) => upd({ collectionName: v })} placeholder="my_collection" mono />
+      </Prop>
+      <Prop label="Embedding model" htmlFor={`${id}-emb`}>
+        <Select
+          id={`${id}-emb`}
+          value={data.embeddingModel}
+          onChange={(v) => upd({ embeddingModel: v })}
+          options={['text-embedding-3-small', 'text-embedding-3-large', 'text-embedding-ada-002', 'voyage-3', 'mistral-embed', 'bge-large-en-v1.5'].map((v) => ({ value: v, label: v }))}
+        />
+      </Prop>
+      <Sect>Retrieval</Sect>
+      <Slider id={`${id}-topk`} label="Top-K results" value={data.topK} onChange={(v) => upd({ topK: v })} min={1} max={20} step={1} display={String(data.topK)} />
+      <p className="af-hint" style={{ color: 'var(--warn)' }}>Memory nodes are not transpiled yet: a graph that has one cannot run.</p>
     </>
   )
 }
 
 function RouterConfig({ id, data }: { id: string; data: RouterNodeData }) {
-  const { updateNodeData } = useGraphStore()
-  const upd = useCallback(
-    (partial: Partial<RouterNodeData>) => updateNodeData(id, partial),
-    [id, updateNodeData]
-  )
-
+  const upd = useUpdate<RouterNodeData>(id)
   const nodes = useGraphStore((s) => s.nodes)
-  const targetOptions = nodes
-    .filter((n) => n.id !== id && (n.data.nodeType === 'agent' || n.data.nodeType === 'human_gate'))
-    .map((n) => ({ value: n.id, label: n.data.label }))
-  const optionsFor = (target: string) =>
-    targetOptions.some((o) => o.value === target)
-      ? targetOptions
-      : [{ value: target, label: target ? `${target} (missing node)` : 'Choose a target node…' }, ...targetOptions]
-
-  const updateRoute = (i: number, change: Partial<{ label: string; target: string }>) => {
-    const routes = [...data.routes]
-    routes[i] = { ...routes[i], ...change }
-    upd({ routes })
-  }
-
-  return (
-    <PanelSection title="Routing Condition">
-      <div>
-        <FieldLabel>Condition Expression</FieldLabel>
-        <TextArea
-          value={data.condition}
-          onChange={(v) => upd({ condition: v })}
-          rows={3}
-          placeholder={'"escalate" if "refund" in last.lower() else "faq"'}
-        />
-        <p className="text-[10px] text-[var(--text-ghost)] mt-1.5">
-          Python expression returning a route label. <span className="font-mono">last</span> is the last message&apos;s text; <span className="font-mono">state</span> is the full state.
-          Picking a target draws its edge; dragging from a route&apos;s handle sets its target.
-        </p>
-      </div>
-      <div>
-        <FieldLabel>Routes</FieldLabel>
-        <div className="space-y-2">
-          {data.routes.map((r, i) => (
-            <div
-              key={i}
-              className="p-2 rounded-lg bg-[var(--surface-0)] border border-[var(--border-subtle)] space-y-1.5"
-            >
-              <div className="flex gap-1.5 items-center">
-                <TextInput
-                  value={r.label}
-                  onChange={(v) => updateRoute(i, { label: v })}
-                  placeholder="route_label"
-                  className="flex-1 h-7 text-[11px]"
-                />
-                <button
-                  onClick={() => upd({ routes: data.routes.filter((_, j) => j !== i) })}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-ghost)] hover:text-[#FF6B81] hover:bg-[#FF6B81]/8 transition-all border border-transparent hover:border-[#FF6B81]/15 flex-shrink-0"
-                  title="Remove route"
-                >
-                  <Trash2 size={11} />
-                </button>
-              </div>
-              <Select value={r.target} onChange={(v) => updateRoute(i, { target: v })} options={optionsFor(r.target)} />
-            </div>
-          ))}
-        </div>
-        <button
-          onClick={() => upd({ routes: [...data.routes, { label: 'new_route', target: '' }] })}
-          className="text-[11px] text-[#FFB547] hover:text-[#FFD08A] transition-colors font-mono mt-2 font-medium flex items-center gap-1"
-        >
-          <Plus size={11} />
-          Add route
-        </button>
-      </div>
-    </PanelSection>
-  )
-}
-
-function HumanGateConfig({ id, data }: { id: string; data: HumanGateNodeData }) {
-  const { updateNodeData } = useGraphStore()
-  const upd = useCallback(
-    (partial: Partial<HumanGateNodeData>) => updateNodeData(id, partial),
-    [id, updateNodeData]
-  )
+  const targets = nodes.filter((n) => n.id !== id && (n.data.nodeType === 'agent' || n.data.nodeType === 'human_gate'))
+  const updateRoute = (i: number, change: Partial<{ label: string; target: string }>) =>
+    upd({ routes: data.routes.map((r, j) => (j === i ? { ...r, ...change } : r)) })
   return (
     <>
-      <PanelSection title="Approval Prompt">
-        <TextArea
-          value={data.prompt}
-          onChange={(v) => upd({ prompt: v })}
-          rows={4}
-          placeholder="Please review the output and approve or reject."
-        />
-      </PanelSection>
-      <PanelSection title="Settings">
-        <SliderField
-          label="Timeout (seconds)"
-          value={data.timeoutSeconds}
-          onChange={(v) => upd({ timeoutSeconds: v })}
-          min={30} max={3600} step={30}
-          display={`${data.timeoutSeconds}s`}
-          color="#FF6B81"
-        />
-        <ToggleField
-          label="Require explicit approval"
-          hint="If off, gate auto-approves on timeout instead of failing"
-          checked={data.approvalRequired}
-          onChange={(v) => upd({ approvalRequired: v })}
-          color="#FF6B81"
-        />
-      </PanelSection>
+      <Sect>Routing condition</Sect>
+      <Area id={`${id}-cond`} value={data.condition} onChange={(v) => upd({ condition: v })} rows={3} mono placeholder={'"escalate" if "refund" in last.lower() else "faq"'} />
+      <p className="af-hint" style={{ marginTop: 6 }}>
+        Python expression returning a route label. <code>last</code> is the last message&apos;s text; <code>state</code> is the full state.
+      </p>
+      <Sect>Routes</Sect>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {data.routes.map((r, i) => (
+          <div key={i} className="af-rrow">
+            <input className="af-in af-mono" value={r.label} placeholder="route_label" aria-label="Route label" onChange={(e) => updateRoute(i, { label: e.target.value })} />
+            <select className="af-in" value={r.target} aria-label="Route target" onChange={(e) => updateRoute(i, { target: e.target.value })}>
+              <option value="">{r.target && !targets.some((t) => t.id === r.target) ? `${r.target} (missing)` : 'Choose target…'}</option>
+              {targets.map((t) => <option key={t.id} value={t.id}>{t.data.label}</option>)}
+            </select>
+            <button className="af-ibtn sm" aria-label="Remove route" onClick={() => upd({ routes: data.routes.filter((_, j) => j !== i) })}><X size={13} /></button>
+          </div>
+        ))}
+        <button className="af-btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => upd({ routes: [...data.routes, { label: 'new_route', target: '' }] })}>
+          <Plus size={12} />Add route
+        </button>
+      </div>
+      <p className="af-hint" style={{ marginTop: 8 }}>Picking a target draws its edge; dragging from a route&apos;s port sets it.</p>
     </>
   )
 }
 
-// ─── Main Panel ──────────────────────────────────────────────────────────────
+function HumanGateConfig({ id, data }: { id: string; data: HumanGateNodeData }) {
+  const upd = useUpdate<HumanGateNodeData>(id)
+  return (
+    <>
+      <Sect>Approval prompt</Sect>
+      <Area id={`${id}-prompt`} value={data.prompt} onChange={(v) => upd({ prompt: v })} rows={4} placeholder="Please review the output and approve or reject." />
+      <Sect>Settings</Sect>
+      <Slider id={`${id}-timeout`} label="Timeout" value={data.timeoutSeconds} onChange={(v) => upd({ timeoutSeconds: v })} min={30} max={3600} step={30} display={`${data.timeoutSeconds}s`} />
+      <Prop label="Require explicit approval">
+        <div className="ctl">
+          <button className={cn('af-toggle', data.approvalRequired && 'on')} role="switch" aria-checked={data.approvalRequired} aria-label="Require explicit approval" onClick={() => upd({ approvalRequired: !data.approvalRequired })} />
+          <span className="af-hint">{data.approvalRequired ? 'Timeout counts as reject' : 'Auto-approves on timeout'}</span>
+        </div>
+      </Prop>
+    </>
+  )
+}
+
+// ─── Panel ───────────────────────────────────────────────────────────────────
 
 export default function NodeConfigPanel() {
-  const store = useGraphStore()
-  const selectedNode = selectSelectedNode(store)
-  const { updateNodeData, deleteNode, duplicateNode, setSelectedNode } = store
+  const node = useGraphStore(selectSelectedNode)
+  const stats = useGraphStore((s) => (node ? s.nodeStats[node.id] : undefined))
+  const { updateNodeData, deleteNode, duplicateNode, setSelectedNode } = useGraphStore.getState()
+  if (!node) return null
 
-  if (!selectedNode) return null
-
-  const { id, data } = selectedNode
-  const nodeType = data.nodeType as NodeType
-  const colors = NODE_COLORS[nodeType as keyof typeof NODE_COLORS]
+  const { id, data } = node
+  const type = data.nodeType as NodeType
+  const cost = stats && costUsd(data.model, stats)
 
   return (
-    <AnimatePresence>
-      <motion.aside
-        key={id}
-        initial={{ x: 24, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        exit={{ x: 24, opacity: 0 }}
-        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-        className="w-[280px] flex-shrink-0 bg-[var(--surface-1)]/80 backdrop-blur-xl border-l border-[var(--border-subtle)] flex flex-col overflow-hidden"
-      >
-        {/* Header */}
-        <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-[var(--border-subtle)] flex-shrink-0">
-          {/* Accent dot */}
-          <div
-            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-            style={{ background: colors.primary, boxShadow: `0 0 8px ${colors.glow}` }}
-          />
-
-          {/* Type badge */}
-          <span
-            className="font-mono text-[9px] font-semibold tracking-[0.14em] uppercase flex-shrink-0"
-            style={{ color: colors.label }}
-          >
-            {NODE_LABELS[nodeType]}
-          </span>
-
-          {/* Editable name */}
-          <input
-            value={data.label}
-            onChange={(e) => updateNodeData(id, { label: e.target.value })}
-            className="flex-1 min-w-0 bg-transparent text-[12.5px] font-semibold text-[var(--text-primary)] outline-none border-b border-transparent focus:border-white/15 transition-colors font-display"
-          />
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
-            <button
-              onClick={() => duplicateNode(id)}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-ghost)] hover:text-[var(--text-secondary)] hover:bg-white/[0.04] transition-all"
-              title="Duplicate"
-            >
-              <Copy size={12} />
-            </button>
-            <button
-              onClick={() => deleteNode(id)}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-ghost)] hover:text-[#FF6B81] hover:bg-[#FF6B81]/8 transition-all"
-              title="Delete"
-            >
-              <Trash2 size={12} />
-            </button>
-            <button
-              onClick={() => setSelectedNode(null)}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-ghost)] hover:text-[var(--text-secondary)] hover:bg-white/[0.04] transition-all"
-            >
-              <X size={12} />
-            </button>
+    <aside className="af-inspector" aria-label="Node settings">
+      <div className="af-ihead" style={{ '--hue': NODE_HUE[type] } as CSSProperties}>
+        <span className="pled" />
+        <input className="af-name" value={data.label} aria-label="Node name" onChange={(e) => updateNodeData(id, { label: e.target.value })} />
+        <button className="af-ibtn" title="Duplicate" aria-label="Duplicate node" onClick={() => duplicateNode(id)}><Copy size={14} /></button>
+        <button className="af-ibtn" title="Delete (⌫)" aria-label="Delete node" onClick={() => deleteNode(id)}><Trash2 size={14} /></button>
+        <button className="af-ibtn" aria-label="Close" onClick={() => setSelectedNode(null)}><X size={15} /></button>
+      </div>
+      <div className="af-ibody">
+        {type === 'agent' && <AgentConfig id={id} data={data as AgentNodeData} />}
+        {type === 'tool' && <ToolConfig id={id} data={data as ToolNodeData} />}
+        {type === 'memory' && <MemoryConfig id={id} data={data as MemoryNodeData} />}
+        {type === 'router' && <RouterConfig id={id} data={data as RouterNodeData} />}
+        {type === 'human_gate' && <HumanGateConfig id={id} data={data as HumanGateNodeData} />}
+        {stats && (
+          <div className="af-istats">
+            <div><small>tokens</small><b>{(stats.inputTokens + stats.outputTokens).toLocaleString()}</b></div>
+            <div><small>duration</small><b>{(stats.durationMs / 1000).toFixed(1)}s</b></div>
+            <div><small>cost</small><b>{cost !== undefined ? `$${cost.toFixed(4)}` : '—'}</b></div>
           </div>
-        </div>
-
-        {/* Scrollable config */}
-        <div className="flex-1 overflow-y-auto">
-          {nodeType === 'agent'      && <AgentConfig      id={id} data={data as AgentNodeData}      />}
-          {nodeType === 'tool'       && <ToolConfig       id={id} data={data as ToolNodeData}       />}
-          {nodeType === 'memory'     && <MemoryConfig     id={id} data={data as MemoryNodeData}     />}
-          {nodeType === 'router'     && <RouterConfig     id={id} data={data as RouterNodeData}     />}
-          {nodeType === 'human_gate' && <HumanGateConfig  id={id} data={data as HumanGateNodeData}  />}
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 py-2.5 border-t border-[var(--border-subtle)] flex-shrink-0">
-          <p className="font-mono text-[8px] text-[var(--text-ghost)] tracking-wider">{id}</p>
-        </div>
-      </motion.aside>
-    </AnimatePresence>
+        )}
+      </div>
+      <div className="af-ifoot"><span className="af-note">{id}</span></div>
+    </aside>
   )
 }

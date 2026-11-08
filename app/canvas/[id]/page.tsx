@@ -1,162 +1,231 @@
 'use client'
 
-import dynamic from 'next/dynamic'
-import { useCallback, useState, useEffect, useRef, use } from 'react'
-import { flushSync } from 'react-dom'
-import { ReactFlowProvider } from '@xyflow/react'
+import Link from 'next/link'
+import { useCallback, useEffect, useMemo, useRef, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Brain, Wrench, Database, GitBranch, UserCheck,
-  Save, Play, Square, ChevronLeft, Zap,
-  TestTube, Rocket, History, Layers, GripVertical,
-  Wrench as ToolsIcon, Code2,
-} from 'lucide-react'
+import { ReactFlowProvider } from '@xyflow/react'
+import { Play, Square, Save, Activity, FlaskConical, Code2, Wrench, Rocket, Maximize, Sun, LayoutGrid } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { useGraphStore } from '@/store/graph-store'
-import { NODE_COLORS, type NodeType, type RunMetadata, type TestCase } from '@/lib/types'
+import { useUiStore } from '@/store/ui-store'
+import { NODE_LABELS, type NodeType } from '@/lib/types'
+import { cancelRun } from '@/lib/runs'
+import { RunStreamProvider, useRunStream, useRunTotals, fmtClock, fmtTokens, fmtUsd } from '@/lib/run-stream'
+import { cn } from '@/lib/utils'
+import Canvas, { type CanvasHandle } from '@/components/canvas/canvas'
+import NodeConfigPanel from '@/components/canvas/node-config-panel'
 import { ToolLibrary } from '@/components/canvas/tool-library'
-import { CodePreview } from '@/components/canvas/code-preview'
-import { cancelRun, resolveGate } from '@/lib/runs'
+import { Console } from '@/components/console/console'
+import { Rail, NODE_ICONS, type RailSection } from '@/components/shell/rail'
+import { CommandPalette, type Command } from '@/components/shell/command-palette'
+import { DeployDialog } from '@/components/shell/deploy-dialog'
+import { toast } from '@/components/shell/toast'
 
-const Canvas          = dynamic(() => import('@/components/canvas/canvas'),           { ssr: false })
-const NodeConfigPanel = dynamic(() => import('@/components/canvas/node-config-panel'), { ssr: false })
-const TracePanel      = dynamic(() => import('@/components/canvas/trace-panel'),       { ssr: false })
+export default function CanvasPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: graphId } = use(params)
+  const loadGraph = useGraphStore((s) => s.loadGraph)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
-// ─── Palette ─────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    // A new graph starts calm: no run state from the previous one, console closed.
+    useGraphStore.getState().clearRunState()
+    useGraphStore.getState().setSelectedNode(null)
+    useUiStore.setState({ consoleOpen: false, consoleTab: 'trace', runBoxOpen: false })
+    fetch(`/api/graphs/${graphId}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status === 404 ? 'This graph does not exist.' : `HTTP ${r.status}`))))
+      .then((data) => loadGraph(data.graphJson, { id: data.id, name: data.name, version: data.version }))
+      .catch((e: Error) => setLoadError(e.message === 'Failed to fetch' ? 'Could not reach the server. Is the database running?' : e.message))
+  }, [graphId, loadGraph])
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const PALETTE_NODES: Array<{ type: NodeType; label: string; Icon: React.FC<any>; desc: string }> = [
-  { type: 'agent',      Icon: Brain,      label: 'Agent',  desc: 'LLM with tools' },
-  { type: 'tool',       Icon: Wrench,     label: 'Tool',   desc: 'Python function' },
-  { type: 'memory',     Icon: Database,   label: 'Memory', desc: 'Vector store' },
-  { type: 'router',     Icon: GitBranch,  label: 'Router', desc: 'Conditional edge' },
-  { type: 'human_gate', Icon: UserCheck,  label: 'Gate',   desc: 'Approval point' },
-]
-
-function PaletteNode({ type, label, Icon, desc }: typeof PALETTE_NODES[0]) {
-  const colors = NODE_COLORS[type]
-
-  const onDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData('application/agentforge-node', type)
-    e.dataTransfer.effectAllowed = 'move'
+  if (loadError) {
+    return (
+      <div className="af-empty" style={{ paddingTop: '20vh' }}>
+        <b>{loadError}</b>
+        <Link href="/" className="af-btn" style={{ marginTop: 12 }}>Back to graphs</Link>
+      </div>
+    )
   }
 
   return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      className="af-palette-node group relative flex items-center gap-2.5 px-2.5 py-2 rounded-[10px] cursor-grab"
-      style={{
-        background: colors.bg,
-        border: `1px solid ${colors.border}`,
-      }}
-      title={`Drag to add ${label}`}
-    >
-      <div
-        className="w-[30px] h-[30px] rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{
-          background: `${colors.primary}14`,
-          boxShadow: `inset 0 0 0 1px ${colors.primary}20`,
-        }}
-      >
-        <Icon size={14} style={{ color: colors.primary }} strokeWidth={2} />
+    <RunStreamProvider>
+      <ReactFlowProvider>
+        <Editor graphId={graphId} />
+      </ReactFlowProvider>
+    </RunStreamProvider>
+  )
+}
+
+function Editor({ graphId }: { graphId: string }) {
+  const router = useRouter()
+  const [canvas, setCanvas] = useState<CanvasHandle | null>(null)
+  const ui = useUiStore()
+  const graphName = useGraphStore((s) => s.graphName)
+  const nodes = useGraphStore((s) => s.nodes)
+  const { setTheme, resolvedTheme } = useTheme()
+  const save = useSave(graphId)
+  const { openRunBox, stop, isRunning } = useRunControls()
+
+  const selectNode = useCallback((id: string) => {
+    useGraphStore.getState().setSelectedNode(id)
+    canvas?.focusNode(id)
+  }, [canvas])
+
+  // The console takes canvas height when it opens: refit so no node hides behind it.
+  useEffect(() => {
+    const timer = setTimeout(() => canvas?.fitView(), 60)
+    return () => clearTimeout(timer)
+  }, [canvas, ui.consoleOpen])
+
+  const navigate = useCallback((section: RailSection) => {
+    if (section === 'library') router.push('/')
+    else if (section === 'canvas') ui.setConsoleOpen(false)
+    else if (section === 'runs') ui.openConsole('history')
+    else if (section === 'tests') ui.openConsole('tests')
+    else if (section === 'code') ui.openConsole('code')
+    else if (section === 'tools') ui.setToolsOpen(true)
+    else if (section === 'deploy') ui.setDeployOpen(true)
+  }, [router, ui])
+
+  // Keyboard: ⌘K palette, ⌘S save, ⌘↵ run, G-chords to sections, Esc to step back.
+  useEffect(() => {
+    let chord = false
+    let chordTimer: ReturnType<typeof setTimeout> | undefined
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName) || (e.target as HTMLElement).isContentEditable
+      const ui = useUiStore.getState()
+      if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); ui.setPaletteOpen(!ui.paletteOpen); return }
+      if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); save(); return }
+      if (mod && e.key === 'Enter' && !ui.runBoxOpen) { e.preventDefault(); openRunBox(); return }
+      if (e.key === 'Escape' && !typing && !ui.paletteOpen) {
+        if (ui.runBoxOpen) ui.setRunBoxOpen(false)
+        else useGraphStore.getState().setSelectedNode(null)
+        return
+      }
+      if (typing || mod || ui.paletteOpen) return
+      if (e.key.toLowerCase() === 'g' && !chord) { chord = true; chordTimer = setTimeout(() => { chord = false }, 900); return }
+      if (chord) {
+        chord = false
+        clearTimeout(chordTimer)
+        const map: Record<string, RailSection> = { l: 'library', c: 'canvas', r: 'runs', t: 'tests', o: 'tools', d: 'code', p: 'deploy' }
+        const section = map[e.key.toLowerCase()]
+        if (section) { e.preventDefault(); navigate(section) }
+        return
+      }
+      if (e.key === 'f') canvas?.fitView()
+    }
+    window.addEventListener('keydown', handler)
+    return () => { window.removeEventListener('keydown', handler); clearTimeout(chordTimer) }
+  }, [save, openRunBox, navigate, canvas])
+
+  const commands = useMemo<Command[]>(() => [
+    isRunning
+      ? { id: 'stop', group: 'Actions', label: 'Stop run', Icon: Square, run: stop }
+      : { id: 'run', group: 'Actions', label: 'Run graph', keys: ['⌘', '↵'], Icon: Play, run: openRunBox },
+    { id: 'save', group: 'Actions', label: 'Save graph', keys: ['⌘', 'S'], Icon: Save, run: save },
+    { id: 'tests', group: 'Actions', label: 'Open tests', keys: ['G', 'T'], Icon: FlaskConical, run: () => navigate('tests') },
+    { id: 'runs', group: 'Actions', label: 'Open run history', keys: ['G', 'R'], Icon: Activity, run: () => navigate('runs') },
+    { id: 'code', group: 'Actions', label: 'Show generated code', keys: ['G', 'D'], Icon: Code2, run: () => navigate('code') },
+    { id: 'tools', group: 'Actions', label: 'Tool library', keys: ['G', 'O'], Icon: Wrench, run: () => navigate('tools') },
+    { id: 'deploy', group: 'Actions', label: 'Deploy', keys: ['G', 'P'], Icon: Rocket, run: () => navigate('deploy') },
+    { id: 'fit', group: 'Actions', label: 'Fit canvas to view', keys: ['F'], Icon: Maximize, run: () => canvas?.fitView() },
+    { id: 'theme', group: 'Actions', label: `Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} theme`, Icon: Sun, run: () => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark') },
+    { id: 'library', group: 'Actions', label: 'Back to library', keys: ['G', 'L'], Icon: LayoutGrid, run: () => navigate('library') },
+    ...(Object.keys(NODE_LABELS) as NodeType[]).map((t) => ({
+      id: `add-${t}`, group: 'Add', label: `Add ${NODE_LABELS[t].toLowerCase()}`, Icon: NODE_ICONS[t], run: () => canvas?.addAtCenter(t),
+    })),
+    ...nodes.map((n) => ({
+      id: `node-${n.id}`, group: 'Nodes', label: `Jump to ${n.data.label}`, Icon: NODE_ICONS[n.type as NodeType], run: () => selectNode(n.id),
+    })),
+  ], [isRunning, stop, openRunBox, save, navigate, resolvedTheme, setTheme, nodes, selectNode, canvas])
+
+  const railActive: RailSection = !ui.consoleOpen ? 'canvas'
+    : ui.consoleTab === 'history' ? 'runs' : ui.consoleTab === 'tests' ? 'tests' : ui.consoleTab === 'code' ? 'code' : 'canvas'
+
+  return (
+    <div className="af-app">
+      <Rail active={railActive} onNavigate={navigate} onAddNode={(t) => canvas?.addAtCenter(t)} onCommand={() => ui.setPaletteOpen(true)} />
+      <div className="af-main">
+        <TopBar onSave={save} onRun={openRunBox} onStop={stop} isRunning={isRunning} />
+        <div className="af-row">
+          <Canvas ref={setCanvas} />
+          <NodeConfigPanel />
+        </div>
+        <Console graphId={graphId} onSelectNode={selectNode} />
       </div>
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold leading-none mb-[2px]" style={{ color: 'var(--text-primary)', fontFamily: 'Syne, sans-serif' }}>{label}</p>
-        <p className="text-[8.5px] leading-none" style={{ color: 'var(--text-ghost)', fontFamily: 'JetBrains Mono, monospace' }}>{desc}</p>
-      </div>
+      <CommandPalette open={ui.paletteOpen} onOpenChange={ui.setPaletteOpen} commands={commands} />
+      <DeployDialog open={ui.deployOpen} onOpenChange={ui.setDeployOpen} graphName={graphName} />
+      <ToolLibrary open={ui.toolsOpen} onOpenChange={ui.setToolsOpen} />
     </div>
   )
 }
 
-// ─── Toolbar ─────────────────────────────────────────────────────────────────
+// ─── Save ────────────────────────────────────────────────────────────────────
 
-function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: string; onOpenToolLibrary: () => void; onOpenCode: () => void }) {
-  const router = useRouter()
-  const {
-    graphName, isDirty, graphVersion, runStatus, activeRunId,
-    setGraphName, clearRunState,
-  } = useGraphStore()
-
-  const [saving, setSaving] = useState(false)
-
-  // shortcut: plain dropdown list of the last 20 runs; the UI revamp restyles history.
-  const [history, setHistory] = useState<RunMetadata[] | null>(null) // null = closed
-  const toggleHistory = async () => {
-    if (history) return setHistory(null)
-    const res = await fetch(`/api/runs?graphId=${graphId}`)
-    if (res.ok) setHistory(await res.json())
-    else console.error(`History failed (HTTP ${res.status})`)
-  }
-  // shortcut: plain dropdown list of the graph's test cases; the UI revamp restyles the tests panel.
-  const [tests, setTests] = useState<TestCase[] | null>(null) // null = closed
-  const loadTests = useCallback(async () => {
-    const res = await fetch(`/api/graphs/${graphId}/tests`)
-    if (res.ok) setTests(await res.json())
-    else console.error(`Tests failed (HTTP ${res.status})`)
-  }, [graphId])
-  useEffect(() => { // results land when the runs end: poll while any test is pending
-    if (!tests?.some((t) => t.lastResult === 'PENDING')) return
-    const timer = setTimeout(loadTests, 2000)
-    return () => clearTimeout(timer)
-  }, [tests, loadTests])
-  const runTests = async () => {
-    const res = await fetch(`/api/graphs/${graphId}/tests/run`, { method: 'POST' })
-    if (!res.ok) console.error(`Run tests failed (HTTP ${res.status})`)
-    else for (const s of (await res.json()).started as Array<{ testId: string; error?: string }>) {
-      if (s.error) console.error(`Test ${s.testId} could not start: ${s.error}`) // e.g. unsupported graph, engine down
-    }
-    loadTests()
-  }
-  const deleteTest = async (id: string) => {
-    const res = await fetch(`/api/tests/${id}`, { method: 'DELETE' })
-    if (!res.ok) console.error(`Delete test failed (HTTP ${res.status})`)
-    loadTests()
-  }
-
-  const replay = (run: RunMetadata) => {
-    setHistory(null)
-    // Render the cleared state on its own: if this run is already the active one, batching both
-    // writes would leave the trace panel's key unchanged, so it would neither remount nor reconnect.
-    flushSync(clearRunState)
-    // The remounted trace panel's WebSocket replays the stored events.
-    useGraphStore.getState().setRunState(run.id, run.status, run.errorMessage ?? undefined)
-  }
-
-  const handleSave = useCallback(async () => {
-    setSaving(true)
+function useSave(graphId: string) {
+  const saving = useRef(false)
+  return useCallback(async () => {
+    const { isDirty, nodes, edges, graphName } = useGraphStore.getState()
+    if (!isDirty || saving.current) return
+    saving.current = true
     try {
-      const { nodes, edges } = useGraphStore.getState()
       const res = await fetch(`/api/graphs/${graphId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ graphJson: { nodes, edges }, name: graphName }),
       })
-      if (!res.ok) throw new Error(`Save failed (HTTP ${res.status})`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const saved = await res.json()
       useGraphStore.getState().setGraphVersion(saved.version)
       useGraphStore.getState().markSaved()
+      toast(`Saved v${saved.version}`)
     } catch (e) {
-      console.error(e) // graph stays dirty so the user can retry
-    } finally { setSaving(false) }
-  }, [graphId, graphName])
+      console.error(e) // the graph stays dirty so the user can retry
+      toast('Save failed. Your changes are still here; try again.')
+    } finally {
+      saving.current = false
+    }
+  }, [graphId])
+}
+
+// ─── Run controls ────────────────────────────────────────────────────────────
+
+function useRunControls() {
+  const runStatus = useGraphStore((s) => s.runStatus)
+  const isRunning = runStatus === 'RUNNING' || runStatus === 'AWAITING_HUMAN' || runStatus === 'PENDING'
+  const openRunBox = useCallback(() => {
+    const s = useGraphStore.getState().runStatus
+    if (s === 'RUNNING' || s === 'AWAITING_HUMAN') return
+    useUiStore.getState().setRunBoxOpen(true)
+  }, [])
+  const stop = useCallback(() => {
+    const { activeRunId } = useGraphStore.getState()
+    if (activeRunId) cancelRun(activeRunId) // the engine records FAILED "Cancelled by user" and the stream shows it
+  }, [])
+  return { openRunBox, stop, isRunning }
+}
+
+const lastInputs = new Map<string, string>()
+
+function RunBox({ graphId }: { graphId: string }) {
+  const setOpen = useUiStore((s) => s.setRunBoxOpen)
+  const [value, setValue] = useState(() => lastInputs.get(graphId) ?? '')
+  const [error, setError] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault()
-        if (useGraphStore.getState().isDirty) handleSave()
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [handleSave])
+    const close = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node) && !(e.target as HTMLElement).closest('[data-run-btn]')) setOpen(false) }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [setOpen])
 
-  const lastQuery = useRef('')
-  const handleRun = useCallback(async () => {
-    // shortcut: native prompt as the run input box; replace in the UI revamp.
-    const query = window.prompt('Input for this run', lastQuery.current)
-    if (query === null) return
-    lastQuery.current = query
+  const go = async () => {
+    const query = value.trim()
+    if (!query) return
+    lastInputs.set(graphId, query)
+    setStarting(true)
+    setError(null)
     try {
       const res = await fetch('/api/runs', {
         method: 'POST',
@@ -165,240 +234,93 @@ function TopToolbar({ graphId, onOpenToolLibrary, onOpenCode }: { graphId: strin
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
-      useGraphStore.getState().clearRunState() // a rerun must not keep the last run's node states and stats
-      useGraphStore.getState().setRunState(data.runId, 'RUNNING')
-    } catch (e) { console.error('Run failed', e) }
-  }, [graphId])
-
-  const isRunning = runStatus === 'RUNNING' || runStatus === 'AWAITING_HUMAN'
+      const store = useGraphStore.getState()
+      store.clearRunState() // a rerun must not keep the last run's node states and stats
+      store.setRunState(data.runId, 'RUNNING')
+      setOpen(false)
+      useUiStore.getState().openConsole('waterfall')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The run could not start.')
+    } finally {
+      setStarting(false)
+    }
+  }
 
   return (
-    <header
-      className="h-11 flex items-center px-3 gap-2 flex-shrink-0 relative z-50"
-      style={{ background: 'var(--surface-1)', borderBottom: '1px solid var(--border-subtle)' }}
-    >
-      {/* Logo */}
-      <button
-        onClick={() => router.push('/')}
-        className="flex items-center gap-2 mr-1 group"
-        style={{ color: 'var(--text-muted)' }}
-      >
-        <ChevronLeft size={13} className="group-hover:-translate-x-0.5 transition-transform" />
-        <div
-          className="w-6 h-6 rounded-md flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg, #9B8AFF, #5CA4FF)' }}
-        >
-          <Zap size={12} className="text-white" strokeWidth={2.5} />
-        </div>
-      </button>
-
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>
-        <span style={{ color: 'var(--text-ghost)', cursor: 'pointer' }} onClick={() => router.push('/')}>graphs</span>
-        <span style={{ color: 'var(--text-ghost)', opacity: 0.4, fontSize: '8px' }}>→</span>
-        <input
-          value={graphName}
-          onChange={(e) => setGraphName(e.target.value)}
-          className="bg-transparent outline-none border-b border-transparent focus:border-white/15 transition-colors min-w-[100px]"
-          style={{ color: 'var(--text-primary)', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: '12px' }}
-        />
-        <span
-          className="rounded-md px-1.5 py-[1px]"
-          style={{ background: 'var(--surface-3)', border: '1px solid var(--border-subtle)', fontSize: '8px', fontWeight: 600, color: 'var(--text-muted)' }}
-        >
-          v{graphVersion}
-        </span>
-        {isDirty && (
-          <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent-amber)', boxShadow: '0 0 6px rgba(255,181,71,0.4)' }} />
-        )}
+    <div className="af-runbox" ref={box} role="dialog" aria-label="Run input">
+      <textarea
+        autoFocus
+        value={value}
+        placeholder="What should this graph work on?"
+        aria-label="Input for this run"
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); go() }
+          if (e.key === 'Escape') setOpen(false)
+        }}
+      />
+      {error && <p className="af-hint" style={{ color: 'var(--fail)', padding: '8px 12px 0', margin: 0 }}>{error}</p>}
+      <div className="af-dfoot">
+        <span className="af-note">sent as input.query</span>
+        <span className="af-sp" />
+        <button className="af-btn sm ghost" onClick={() => setOpen(false)}>Cancel</button>
+        <button className="af-btn sm primary" onClick={go} disabled={!value.trim() || starting}>
+          {starting ? 'Starting…' : 'Run'} <kbd className="af-kbd">⌘↵</kbd>
+        </button>
       </div>
+    </div>
+  )
+}
 
-      {/* Right actions */}
-      <div className="ml-auto flex items-center gap-1.5">
-        <button
-          onClick={handleSave}
-          disabled={!isDirty || saving}
-          className="af-btn af-btn-save"
-        >
-          <Save size={11} />
-          {saving ? 'Saving…' : 'Save'}
-          {isDirty && (
-            <span style={{ fontFamily: 'JetBrains Mono', fontSize: '7px', background: 'rgba(255,255,255,0.05)', padding: '1px 3px', borderRadius: '3px', color: 'var(--text-ghost)' }}>⌘S</span>
-          )}
-        </button>
+// ─── Top bar ─────────────────────────────────────────────────────────────────
 
-        <div className="w-px h-4" style={{ background: 'var(--border-subtle)' }} />
-
-        <div className="relative">
-          <button onClick={toggleHistory} className="af-icon-btn" title="History">
-            <History size={13} />
-          </button>
-          {history && (
-            <div
-              className="absolute left-0 top-full mt-1 w-[380px] max-h-[320px] overflow-y-auto rounded-lg p-1 font-mono text-[10px]"
-              style={{ background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
-            >
-              {history.length === 0 && <p className="p-2" style={{ color: 'var(--text-ghost)' }}>No runs yet</p>}
-              {history.map((run) => (
-                <button
-                  key={run.id}
-                  onClick={() => replay(run)}
-                  className="w-full text-left px-2 py-1.5 rounded-md hover:bg-white/[0.04] flex gap-2 items-baseline"
-                  title={run.errorMessage ?? undefined}
-                >
-                  <span className="w-[76px] flex-shrink-0" style={{ color: run.status === 'COMPLETE' ? '#9B8AFF' : run.status === 'FAILED' ? '#FF6B81' : '#00E5C3' }}>
-                    {run.status}
-                  </span>
-                  <span className="flex-1 truncate" style={{ color: 'var(--text-secondary)' }}>
-                    {String(run.inputPayload?.query ?? JSON.stringify(run.inputPayload))}
-                  </span>
-                  <span className="flex-shrink-0" style={{ color: 'var(--text-ghost)' }}>
-                    {run.durationMs != null ? `${(run.durationMs / 1000).toFixed(1)}s` : '—'} · {run.tokenCount ?? 0} tok · {new Date(run.createdAt).toLocaleString()}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="relative">
-          <button onClick={() => (tests ? setTests(null) : loadTests())} className="af-icon-btn" title="Tests">
-            <TestTube size={13} />
-          </button>
-          {tests && (
-            <div
-              className="absolute left-0 top-full mt-1 w-[380px] max-h-[320px] overflow-y-auto rounded-lg p-1 font-mono text-[10px]"
-              style={{ background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
-            >
-              <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-                <span style={{ color: 'var(--text-ghost)' }}>
-                  {tests.length === 0 ? 'No tests yet. Save one from a finished run (trace panel).' : `${tests.length} test${tests.length === 1 ? '' : 's'}`}
-                </span>
-                {tests.length > 0 && (
-                  <button onClick={runTests} className="af-btn af-btn-run" style={{ height: 22 }}>
-                    <Play size={9} className="fill-current" />
-                    Run all
-                  </button>
-                )}
-              </div>
-              {tests.map((t) => (
-                <div key={t.id} className="flex gap-2 items-baseline px-2 py-1.5 rounded-md hover:bg-white/[0.04]">
-                  <span className="w-[56px] flex-shrink-0" style={{ color: t.lastResult === 'PASS' ? '#00E5C3' : t.lastResult === 'FAIL' ? '#FF6B81' : 'var(--text-ghost)' }}>
-                    {t.lastResult ?? '—'}
-                  </span>
-                  <span
-                    className="flex-1 truncate"
-                    style={{ color: 'var(--text-secondary)' }}
-                    title={`path: ${t.expectedPath.join(', ') || 'any'}${t.expectedOutputContains ? ` · output contains "${t.expectedOutputContains}"` : ''}`}
-                  >
-                    {t.name}
-                  </span>
-                  <button onClick={() => deleteTest(t.id)} title="Delete test" className="px-1 hover:text-[#FF6B81]" style={{ color: 'var(--text-ghost)' }}>
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <button onClick={onOpenToolLibrary} className="af-icon-btn" title="Tool Library">
-          <ToolsIcon size={13} />
-        </button>
-        <button onClick={onOpenCode} className="af-icon-btn" title="Show generated code">
-          <Code2 size={13} />
-        </button>
-
-        <div className="w-px h-4" style={{ background: 'var(--border-subtle)' }} />
-
-        <button className="af-btn af-btn-deploy">
-          <Rocket size={11} />
-          Deploy
-        </button>
-
+function TopBar({ onSave, onRun, onStop, isRunning }: { onSave: () => void; onRun: () => void; onStop: () => void; isRunning: boolean }) {
+  const graphId = useGraphStore((s) => s.graphId)
+  const graphName = useGraphStore((s) => s.graphName)
+  const graphVersion = useGraphStore((s) => s.graphVersion)
+  const isDirty = useGraphStore((s) => s.isDirty)
+  const setGraphName = useGraphStore((s) => s.setGraphName)
+  const runBoxOpen = useUiStore((s) => s.runBoxOpen)
+  return (
+    <header className="af-topbar" style={{ position: 'relative' }}>
+      <div className="af-crumbs">
+        <Link href="/" className="opt">Graphs</Link>
+        <span className="opt">›</span>
+        <input className="af-name" value={graphName} aria-label="Graph name" onChange={(e) => setGraphName(e.target.value)} />
+        <span className="af-vchip">v{graphVersion}</span>
+        {isDirty && <span className="af-dirty" title="Unsaved changes" />}
+      </div>
+      <Telemetry />
+      <div className="af-actions">
+        <button className="af-btn" onClick={onSave} disabled={!isDirty} title="Save · ⌘S"><Save size={14} />Save</button>
         {isRunning ? (
-          <button onClick={() => { if (activeRunId) cancelRun(activeRunId); clearRunState() }} className="af-btn af-btn-stop">
-            <Square size={9} className="fill-current" />
-            Stop
-          </button>
+          <button className="af-btn danger" onClick={onStop}><Square size={12} />Stop</button>
         ) : (
-          <button onClick={handleRun} className="af-btn af-btn-run">
-            <Play size={9} className="fill-current" />
-            Run
-          </button>
+          <button className="af-btn primary" data-run-btn onClick={onRun}><Play size={13} />Run <kbd className="af-kbd">⌘↵</kbd></button>
         )}
       </div>
+      {runBoxOpen && graphId && <RunBox graphId={graphId} />}
     </header>
   )
 }
 
-// ─── Palette Sidebar ─────────────────────────────────────────────────────────
-
-function NodePalette() {
+function Telemetry() {
+  const runId = useGraphStore((s) => s.activeRunId)
+  const status = useGraphStore((s) => s.runStatus)
+  const { nowMs, state } = useRunStream()
+  const { tokens, cost } = useRunTotals()
+  if (!runId || !status) return null
+  const live = status === 'RUNNING' || status === 'AWAITING_HUMAN'
+  const elapsed = live ? nowMs : state.lastMs
+  const rate = elapsed > 300 ? Math.round(tokens / (elapsed / 1000)) : 0
   return (
-    <aside
-      className="w-[170px] flex-shrink-0 flex flex-col overflow-hidden"
-      style={{ background: 'rgba(12,16,25,0.6)', borderRight: '1px solid var(--border-subtle)' }}
-    >
-      <div className="px-3 pt-3 pb-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-        <div className="flex items-center gap-1.5">
-          <Layers size={10} style={{ color: 'var(--text-ghost)' }} />
-          <p style={{ fontFamily: 'JetBrains Mono', fontSize: '8px', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase' as const, color: 'var(--text-ghost)' }}>
-            Components
-          </p>
-        </div>
-      </div>
-      <div className="p-2 flex flex-col gap-1.5 overflow-y-auto flex-1">
-        {PALETTE_NODES.map((n) => <PaletteNode key={n.type} {...n} />)}
-      </div>
-      <div className="p-2.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        <div className="flex items-center gap-1.5 justify-center">
-          <GripVertical size={8} style={{ color: 'var(--text-ghost)' }} />
-          <p style={{ fontFamily: 'JetBrains Mono', fontSize: '7px', color: 'var(--text-ghost)', letterSpacing: '0.1em' }}>DRAG TO CANVAS</p>
-        </div>
-      </div>
-    </aside>
-  )
-}
-
-// ─── Page ────────────────────────────────────────────────────────────────────
-
-export default function CanvasPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: graphId } = use(params)
-  const { loadGraph, activeRunId } = useGraphStore()
-  const [toolLibraryOpen, setToolLibraryOpen] = useState(false)
-  const [codeOpen, setCodeOpen] = useState(false)
-
-  useEffect(() => {
-    if (!graphId) return
-    fetch(`/api/graphs/${graphId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.graphJson) {
-          loadGraph(data.graphJson, { id: data.id, name: data.name, version: data.version })
-        }
-      })
-      .catch(console.error)
-  }, [graphId, loadGraph])
-
-  return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--void)' }}>
-      <TopToolbar graphId={graphId} onOpenToolLibrary={() => setToolLibraryOpen(true)} onOpenCode={() => setCodeOpen(true)} />
-      <div className="flex flex-1 min-h-0">
-        <NodePalette />
-        <ReactFlowProvider>
-          <main className="flex-1 min-w-0 relative">
-            <Canvas />
-          </main>
-        </ReactFlowProvider>
-        <NodeConfigPanel />
-        <TracePanel
-          key={activeRunId ?? 'idle'} // remount per run so its traces, output and gate state start empty
-          runId={activeRunId}
-          onGateApprove={() => { if (activeRunId) resolveGate(activeRunId, 'approve') }}
-          onGateReject={() => { if (activeRunId) resolveGate(activeRunId, 'reject') }}
-        />
-      </div>
-      <ToolLibrary open={toolLibraryOpen} onOpenChange={setToolLibraryOpen} />
-      <CodePreview graphId={graphId} open={codeOpen} onOpenChange={setCodeOpen} />
+    <div className="af-telemetry">
+      <i className={cn('af-led', status)} />
+      <span className="st">{status}</span>
+      <span>{fmtClock(elapsed)}</span>
+      <span className="opt">{fmtTokens(tokens)} tok</span>
+      <span className="opt">{rate} tok/s</span>
+      <span className="opt">{fmtUsd(cost)}</span>
     </div>
   )
 }
