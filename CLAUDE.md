@@ -61,9 +61,9 @@ repo's `.env.local`). Next owns runs; the engine owns run **status and events** 
   in `lib/test-cases.ts`. `POST /api/graphs/:id/tests/run` starts one run per test through
   `lib/start-run.ts` (shared with `POST /api/runs`) and sets `lastResult = PENDING`; `GET …/tests`
   grades pending tests whose run has ended (`gradeRun`, unit-tested in Jest) and stores `lastResult`.
-- UI: the TestTube button lists tests (Run all, delete); "Save as test" in the trace panel after a
-  COMPLETE run prefills the input, the visited path and the first output line (output assertions are
-  brittle with real models — clear the text via PATCH if a test flaps). Minimal until the revamp.
+- UI: the console's Tests tab lists tests (Run all, delete with inline confirm); "Save as test" in the
+  console summary after a COMPLETE run opens a form prefilled with the input, the visited path and the
+  first output line (output assertions are brittle with real models — clear the text if a test flaps).
 - CI: `.github/workflows/ci.yml` runs tsc/eslint/jest and pytest (fake models, no DB). `npm run
   test:graphs` (`scripts/test-graphs.mjs`) runs every graph's tests against a live `AGENTFORGE_URL` and
   exits non-zero on a FAIL; CI runs it only when that secret is set.
@@ -72,7 +72,7 @@ repo's `.env.local`). Next owns runs; the engine owns run **status and events** 
 
 Graph → LangGraph Python **as a string** (`POST /api/graphs/:id/transpile` →
 `{ language, code, order }`; `422 { error, code, piece }` for unsupported graphs; 404 if missing).
-Optional body `{ graphJson }` transpiles the editor's unsaved canvas (used by **Show Code**).
+Optional body `{ graphJson }` transpiles the editor's unsaved canvas (used by the console's **Code** tab).
 Execution is the engine's job (below).
 
 - **`lib/transpiler/walk.ts`** — one general `plan(graph, registry)`: validation + topological
@@ -111,8 +111,25 @@ Execution is the engine's job (below).
   redraws its edge, dragging from a route handle sets its target, deleting the edge clears it.
 - Routers emit no run events; `edges.tsx` lights a router's branch once its target node has run (the
   other branches stay dim).
-- History (toolbar) lists the last 20 runs from `GET /api/runs?graphId=`; clicking one makes it the
-  active run and the WebSocket replays its stored events, so the canvas re-animates.
+- History (console tab) lists the last 20 runs from `GET /api/runs?graphId=`; clicking one makes it
+  the active run and the WebSocket replays its stored events, so the canvas re-animates.
+
+## UI ("Flight Deck", revamp started 2026-11-08)
+
+Design source: the Flight Deck prototype artifact (see memory). Dark-first, light theme via
+`next-themes` (`data-theme` on `<html>`). **All colors are CSS tokens in `app/globals.css`** — never
+hex in components; node-type hues are `NODE_HUE` (`var(--t-agent)` …), validated colorblind-safe.
+Classes are prefixed `af-`; Tailwind is only for the odd utility.
+
+- Shell: `components/shell/` — `rail.tsx` (sections + node types to drag/click in), command palette
+  (⌘K), dialog, toast, deploy dialog, graph thumbnail. Chrome state lives in `store/ui-store.ts`.
+- Run stream: `lib/run-stream.tsx` (`RunStreamProvider`) owns the WebSocket, mirrors events into the
+  graph store (canvas animation) and folds them into a timeline (trace, waterfall, telemetry). Replay
+  = `useRunStream().replay(run)`.
+- Canvas page: rail · top bar (name, version, telemetry, Save, Run popover / Stop) · React Flow canvas
+  + inspector (`node-config-panel.tsx`) · bottom console (`components/console/`: Trace, Waterfall,
+  Output, Tests, History, Code). Keys: ⌘S, ⌘↵, ⌘K, `G` then L/C/R/T/O/D/P, `F` fit, Esc.
+- Geist loads from Google Fonts at runtime (`shortcut:` in globals.css; move to `next/font`).
 - Retired model values are upgraded on `loadGraph` (`LEGACY_MODEL_ALIASES`; transpiler also maps them).
 - Tailwind is v4: `app/globals.css` must use `@import "tailwindcss"` (the v3 `@tailwind` directives
   silently drop the theme — every spacing/sizing utility disappears).
@@ -124,6 +141,6 @@ Execution is the engine's job (below).
 - `GET /api/runs/:id` lives in `app/api/runs/[id]/route.ts`. Missing records → 404 (not 500);
   backend dispatch checks `res.ok`; gate decisions recorded only after the engine accepts them.
   `Run → Graph` cascades on delete (migration `run_cascade_delete`).
-- `app/page.tsx` is the graph library; trace panel mirrors run events into the store so the canvas
+- `app/page.tsx` is the graph library; the run stream mirrors run events into the store so the canvas
   animates; Save/Run check responses; ⌘S/Ctrl+S saves; selection/measurement no longer marks dirty.
 - `tsc`, `eslint` (0 errors / 0 warnings), and `next build` are all clean.

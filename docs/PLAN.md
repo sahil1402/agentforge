@@ -11,7 +11,7 @@ this file has **what is left, in order, split into tasks**. Tick boxes as tasks 
 | 2.5 Hardening | ✅ agent prompts (one user turn), run input, Claude 5.5 pricing — ⬜ real-model check |
 | 3 Live canvas | ✅ done, committed (3.1–3.5) |
 | 4 Test harness | ✅ done, committed (4.1–4.5) |
-| UI revamp | ⬜ user supplies the UI skills/plugins |
+| UI revamp | 🟡 Flight Deck ported 2026-11-08 (all screens); iterating on user feedback |
 | 5 Deploy | ⬜ `GraphVersion` snapshots are saved on every PATCH; nothing reads them |
 | 6 Launch | ⬜ |
 
@@ -153,4 +153,4 @@ to-do list.
 
 - Engine restart loses in-flight runs (gates use `InMemorySaver`); startup marks them FAILED.
 - Approve clicked at the exact moment a gate times out is accepted but the run ends as a timeout.
-- Run input is a native `window.prompt` (revamp).
+- The UI revamp was checked against a mocked API + fake engine socket, not a live DB/engine yet.
