@@ -1,19 +1,22 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next'
+import './globals.css'
+import { ThemeProvider } from '@/components/shell/theme-provider'
+import { Toaster } from '@/components/shell/toast'
 
 export const metadata: Metadata = {
-  title: "AgentForge — Visual IDE for Multi-Agent AI",
-  description: "Design, test, and deploy multi-agent AI systems with a visual canvas",
-};
+  title: 'AgentForge',
+  description: 'Design, run, test and deploy multi-agent graphs',
+}
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col font-body">{children}</body>
+    <html lang="en" className="h-full" suppressHydrationWarning>
+      <body className="h-full antialiased">
+        <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem disableTransitionOnChange>
+          {children}
+          <Toaster />
+        </ThemeProvider>
+      </body>
     </html>
-  );
+  )
 }

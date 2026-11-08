@@ -161,6 +161,15 @@ export interface GraphEntry {
 
 // ─── Node Visual System ──────────────────────────────────────────────────────
 
+/** Each node type's hue, as the CSS custom property that app/globals.css defines for both themes. */
+export const NODE_HUE: Record<NodeType, string> = {
+  agent:      'var(--t-agent)',
+  tool:       'var(--t-tool)',
+  memory:     'var(--t-memory)',
+  router:     'var(--t-router)',
+  human_gate: 'var(--t-gate)',
+}
+
 export interface NodeColorConfig {
   primary: string       // Main accent color
   bg: string            // Card background tint
